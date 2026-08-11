@@ -1,16 +1,15 @@
 import json
 import re
 import requests
-
+from decrypt import process_data
 
 LocalDump = 'lastData Dump.json'
 relicInfo = "https://raw.githubusercontent.com/WFCD/warframe-items/refs/heads/master/data/json/Relics.json"
+file_path = r"C:\Users\Elijah\AppData\Local\AlecaFrame\lastData.dat"
 
 
-
-with open(LocalDump) as json_data:
-    data = json.load(json_data)
-    relicInfo = requests.get(relicInfo).json()
+data = json.loads(process_data(file_path))
+relicInfo = requests.get(relicInfo).json()
 
 class Relics:
     def __init__(self, uniqueName, name, codexSecret, description, type, imageName, category, tradable, locations, rewards):
@@ -35,7 +34,6 @@ class localRelic:
         # Safely extract 'urlName' without raising a KeyError if keys are missing
         market_data = getattr(self.goldReward, 'item', {}).get("warframeMarket") or {}
         self.goldUrlName = market_data.get("urlName", "")
-        self.goldPrice = 
 
 
               
@@ -81,10 +79,5 @@ for item in data['MiscItems']:
         rewards = allRelics[[relic.uniqueName for relic in allRelics].index(uniqueName)].rewards
         localRelics.append(localRelic(name, count, rewards))
 
-# for relic in localRelics:
-#     print(f"Relic Name: {relic.Name}, Count: {relic.Count}, Rare Reward: {[reward.item for reward in relic.allRewards if reward.rarity == 'Rare']}")
 
-
-print(localRelics[1].goldUrlName)  # Print the goldUrlName attribute of the first relic
-
-#{'name': 'Pyrana Prime Blueprint', 'uniqueName': '/Lotus/Types/Game/Projections/T1VoidProjectionLimboPrimeDBronze', 'warframeMarket': {'id': '5b2985e1eb069f04ea65b0ea', 'urlName': 'pyrana_prime_blueprint'}}
+print(f"Found {len(localRelics)} relics in the local dump.")
