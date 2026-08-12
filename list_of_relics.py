@@ -29,9 +29,10 @@ class localRelic:
         self.Name = Name
         self.Count = Count
         self.allRewards = allRewards
-        self.goldReward = allRewards[-1] if allRewards else None
+        # gold part = rarest drop = lowest chance, NOT necessarily the last
+        # item in the list -- reward order isn't consistent across relics
+        self.goldReward = min(allRewards, key=lambda r: r.chance) if allRewards else None
 
-        # Safely extract 'urlName' without raising a KeyError if keys are missing
         market_data = getattr(self.goldReward, 'item', {}).get("warframeMarket") or {}
         self.goldUrlName = market_data.get("urlName", "")
 
@@ -69,12 +70,15 @@ for relic in relicInfo:
     
     allRelics.append(Relics(uniqueName, name, codexSecret, description, type, imageName, category, tradable, locations, rewards))
 
+VALID_RELICS = ("Lith", "Meso", "Neo", "Axi")
 
 
 for item in data['MiscItems']:
     if 'Projection' in item["ItemType"]:
         uniqueName = item['ItemType']
         name = allRelics[[relic.uniqueName for relic in allRelics].index(uniqueName)].name
+        if not name.startswith(VALID_RELICS):
+            continue
         count = item['ItemCount']
         rewards = allRelics[[relic.uniqueName for relic in allRelics].index(uniqueName)].rewards
         localRelics.append(localRelic(name, count, rewards))
