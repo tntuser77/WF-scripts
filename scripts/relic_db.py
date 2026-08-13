@@ -103,10 +103,21 @@ def init_db(path: str = DB_PATH) -> sqlite3.Connection:
 # ---------------------------------------------------------------------------
 
 def upsert_inventory(conn: sqlite3.Connection, local_relics):
+    """
+    local_relics is treated as a FULL snapshot of what you currently own --
+    if a (base_name, refinement) pair from a past run isn't in this scan,
+    that means you now own zero of it (e.g. you refined your last Intact
+    copies into Radiant). We zero those out below so they don't linger in
+    the DB with a stale nonzero count -- otherwise a just-refined relic
+    shows up as "worth upgrading" (stale Intact row) AND "worth opening"
+    (new Radiant row) at the same time.
+    """
     now = datetime.now(timezone.utc).isoformat()
+    seen = set()
 
     for r in local_relics:
         base_name, refinement = split_refinement(r.Name)
+        seen.add((base_name, refinement))
 
         conn.execute("""
             INSERT INTO relics (base_name, refinement, count, last_seen)
@@ -128,6 +139,16 @@ def upsert_inventory(conn: sqlite3.Connection, local_relics):
                     part_name = excluded.part_name,
                     url_name  = excluded.url_name
             """, (base_name, part_name, r.goldUrlName))
+
+    # Reconcile: any (base_name, refinement) still in the DB with count > 0
+    # that this scan did NOT report must now be at 0.
+    stale = conn.execute("SELECT base_name, refinement FROM relics WHERE count > 0").fetchall()
+    for base_name, refinement in stale:
+        if (base_name, refinement) not in seen:
+            conn.execute("""
+                UPDATE relics SET count = 0, last_seen = ?
+                WHERE base_name = ? AND refinement = ?
+            """, (now, base_name, refinement))
 
     conn.commit()
 
@@ -367,6 +388,10 @@ if __name__ == "__main__":
     from list_of_relics import localRelics
 
     conn = init_db()
+
+    total_relic_count = sum(r.Count for r in localRelics)
+    print(f"Found {len(localRelics)} relics in the local dump. "
+          f"Found {total_relic_count} total relics.")
 
     _, unmatched = check_refinement_parsing(localRelics, verbose=False)
     if unmatched:
