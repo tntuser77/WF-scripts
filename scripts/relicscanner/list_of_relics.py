@@ -1,7 +1,7 @@
 import json
 import re
 import requests
-from scripts.decrypt import process_data
+from scripts.relicscanner.decrypt import process_data
 
 LocalDump = 'lastData Dump.json'
 relicInfo = "https://raw.githubusercontent.com/WFCD/warframe-items/refs/heads/master/data/json/Relics.json"
