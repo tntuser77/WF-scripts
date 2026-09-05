@@ -323,6 +323,107 @@ def api_board_refresh():
     return jsonify({"started": True})
 
 
+_sets = {"state": "idle", "step": "", "done": 0, "total": 0,
+         "updated": None, "report": None, "plat": None, "error": None}
+
+
+def _sets_run() -> None:
+    import advisor
+    try:
+        _sets.update({"state": "working", "error": None, "report": None,
+                      "step": "reading AlecaFrame dump"})
+        live = advisor.owned_from_dump()
+        _sets["plat"] = live["plat"]
+        tradable = advisor._tradable_parts(live["parts"])
+        groups = __import__("sets").group_owned(tradable) if tradable else {}
+        part_slugs = sorted({p for g in groups.values() for p in g["parts"]})
+        set_slugs = sorted({g["set_slug"] for g in groups.values() if g["set_slug"]})
+        prices, set_prices = {}, {}
+        total = len(part_slugs) + len(set_slugs)
+        _sets.update({"done": 0, "total": total})
+        with _price_lock:
+            for i, s in enumerate(part_slugs, 1):
+                if _sets.get("state") != "working":
+                    return
+                _sets.update({"step": f"pricing part {i}/{len(part_slugs)}: {s}",
+                              "done": i})
+                try:
+                    st = market_client.part_statistics(s)
+                except Exception:
+                    st = {"median_48h": None, "median_90d": None, "market_link": ""}
+                try:
+                    dq = advisor.market_items.fetch_detail(s).get("ducats")
+                except Exception:
+                    dq = None
+                prices[s] = {"p48": st.get("median_48h"), "p90": st.get("median_90d"),
+                             "link": st.get("market_link", ""), "ducats": dq}
+            for j, s in enumerate(set_slugs, 1):
+                if _sets.get("state") != "working":
+                    return
+                _sets.update({"step": f"pricing set {j}/{len(set_slugs)}: {s}",
+                              "done": len(part_slugs) + j})
+                try:
+                    t = market_client.top_orders_by_slug(s, min_qty=1)
+                except Exception:
+                    t = {"sell_price": None, "sell_qty": None, "avg_buy": None,
+                         "market_link": f"https://warframe.market/items/{s}"}
+                set_prices[s] = {"sell": t.get("sell_price"), "qty": t.get("sell_qty"),
+                                 "avg_buy": t.get("avg_buy"),
+                                 "link": t.get("market_link", "")}
+        _sets["step"] = "grouping sets and sourcing missing pieces"
+        report = advisor.build_report(
+            live["parts"], live["relics"],
+            price_fn=lambda slugs: {s: prices.get(s, {}) for s in slugs},
+            set_price_fn=lambda slugs: {s: set_prices.get(s, {}) for s in slugs})
+        _sets.update({"state": "done", "report": report,
+                      "step": f"done: {len(groups)} sets",
+                      "updated": time.strftime("%H:%M:%S")})
+    except Exception as e:
+        _sets.update({"state": "error", "error": str(e)})
+
+
+@app.get("/api/sets")
+def api_sets_start():
+    if _sets["state"] != "working":
+        _sets.update({"state": "working", "step": "starting"})
+        threading.Thread(target=_sets_run, daemon=True).start()
+    return jsonify({"started": True, "state": _sets["state"]})
+
+
+@app.get("/api/sets/status")
+def api_sets_status():
+    return jsonify({k: v for k, v in _sets.items()})
+
+
+@app.post("/api/snapshots/save")
+def api_snap_save():
+    import snapshots
+    name = (request.get_json(silent=True) or {}).get("name")
+    try:
+        out = snapshots.save(name)
+        return jsonify({"ok": True, **out})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.get("/api/snapshots/list")
+def api_snap_list():
+    import snapshots
+    return jsonify({"snaps": snapshots.list_all()})
+
+
+@app.get("/api/snapshots/diff")
+def api_snap_diff():
+    import snapshots
+    a = request.args.get("a", "")
+    b = request.args.get("b", "")
+    try:
+        return jsonify({"ok": True, "diff": snapshots.diff(
+            snapshots.load(a), snapshots.load(b))})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 _inv = {"state": "idle", "step": "", "done": 0, "total": 0,
        "updated": None, "types": 0, "count": 0,
        "up_raw": [], "op_raw": [],

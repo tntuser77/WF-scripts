@@ -7,6 +7,7 @@ gold_part_price_cache.json
 market_catalog.json
 market_detail_cache.json
 set_cache.json
+snapshots/
 *.log
 
 # local launcher profile (regenerated on launch)

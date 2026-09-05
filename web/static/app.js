@@ -14,7 +14,72 @@ async function doSearch() {
 async function boardToggle() {
   const cur = document.getElementById("boardBtn").textContent;
   await fetch("/api/board/" + (cur === "Start" ? "start" : "stop"), {method: "POST"});
-  loadBoard();
+async function loadSets() {
+  await fetch("/api/sets");
+  pollSets();
+}
+async function pollSets() {
+  const r = await fetch("/api/sets/status");
+  const d = await r.json();
+  const prog = document.getElementById("setsProg");
+  if (d.state === "working") {
+    prog.textContent = d.step + (d.total ? " (" + d.done + "/" + d.total + ")" : "...");
+    setTimeout(pollSets, 1500);
+  } else if (d.state === "done") {
+    prog.textContent = d.step + (d.updated ? ". Updated " + d.updated + "." : "");
+    renderSets(d.report);
+  } else if (d.state === "error") {
+    prog.textContent = "Error: " + d.error;
+  } else {
+    prog.textContent = "Not priced yet.";
+  }
+}
+function renderSets(rep) {
+  const out = document.getElementById("setsOut");
+  const near = (rep.near || []).map(x =>
+    "<tr><td><a href='" + x.set_link + "' target='_blank'>" + x.set + "</a> (" +
+    x.have + "/" + x.need + ")</td><td>" + x.sell_now + "p</td><td>" +
+    (x.set_sell != null ? x.set_sell + "p" : "?") + "</td><td>" +
+    (x.marginal != null ? x.marginal + "p" : "?") + "</td><td>" +
+    (x.buy != null ? x.buy + "p" : "?") + "</td><td>" +
+    (x.source ? x.source.relic + " " + x.source.exp_runs + " runs, own " + x.source.owned : "?") +
+    "</td><td>" + x.verdict + "</td></tr>").join("");
+  const comp = (rep.complete || []).map(x =>
+    "<tr><td><a href='" + x.set_link + "' target='_blank'>" + x.set + "</a></td><td>" +
+    x.set_sell + "p</td></tr>").join("");
+  const sell = (rep.sell_rank || []).slice(0, 20).map(x =>
+    "<tr" + (x.hold ? " style='background:#2d2a17;'" : "") + "><td>" + x.part + "</td><td>x" +
+    x.count + "</td><td>" + x.p48 + "p</td><td>" + x.value + "p</td><td>" +
+    (x.hold ? "hold, finishes " + x.set : x.set || "") + "</td></tr>").join("");
+  out.innerHTML =
+    "<h3>One piece short (" + (rep.near || []).length + ")</h3><table><thead><tr><th>Set</th><th>Sell parts</th><th>Set sells</th><th>Missing worth</th><th>Buy missing</th><th>Farm</th><th>Call</th></tr></thead><tbody>" +
+    (near || "<tr><td colspan='7' class='muted'>None.</td></tr>") + "</tbody></table>" +
+    "<h3>Complete, ready to list (" + (rep.complete || []).length + ")</h3><table><tbody>" +
+    (comp || "<tr><td class='muted'>None.</td></tr>") + "</tbody></table>" +
+    "<h3>Best parts to sell (highlighted = hold, finishes a set)</h3><table><thead><tr><th>Part</th><th>Count</th><th>48h</th><th>Value</th><th>Set</th></tr></thead><tbody>" + sell + "</tbody></table>";
+}
+async function saveSnap() {
+  const r = await fetch("/api/snapshots/save", {method: "POST"});
+  const d = await r.json();
+  document.getElementById("snapOut").textContent = d.ok ? "Saved " + d.file + "." : "Error: " + d.error;
+}
+async function diffSnaps() {
+  const l = await (await fetch("/api/snapshots/list")).json();
+  const s = l.snaps || [];
+  if (s.length < 2) { document.getElementById("snapOut").textContent = "Need two snapshots first."; return; }
+  const r = await fetch("/api/snapshots/diff?a=" + s[1].file + "&b=" + s[0].file);
+  const d = await r.json();
+  if (!d.ok) { document.getElementById("snapOut").textContent = "Error: " + d.error; return; }
+  const x = d.diff;
+  document.getElementById("snapOut").innerHTML =
+    "Plat " + x.plat_from + " to " + x.plat_to + " (" + x.plat_delta + "). " +
+    "Cracked value " + x.cracked_value + "p. Sold est " + x.sold_est + "p. Relic cost " + x.relic_cost + "p at market sell." +
+    "<br>Relics out: " + x.relics_out.map(e => e.relic + " x" + e.n).join(", ") +
+    "<br>Parts in: " + x.parts_in.map(e => e.part + " x" + e.n + " (" + e.value + "p)").join(", ") +
+    "<br>Parts out: " + x.parts_out.map(e => e.part + " x" + e.n + " (" + e.value + "p)").join(", ") +
+    "<br><span>Relic cost is opportunity cost. Bought and farmed relics look the same in the dump.</span>";
+}
+loadBoard();
 }
 async function loadBoard() {
   const mp = document.getElementById("minPart").value;

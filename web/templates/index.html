@@ -92,6 +92,17 @@ a { color: #8ab4ff; }
 <div id="invProg" class="muted" style="margin-top:10px;"></div>
 <div id="invTiers" style="margin-top:10px;"></div>
 </section>
+<section class="wide">
+<h2>Sets and sessions</h2>
+<div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+<button onclick="loadSets()">Price sets</button>
+<button onclick="saveSnap()">Save snapshot</button>
+<button onclick="diffSnaps()">Diff last two</button>
+<span class="muted" id="setsProg">Not priced yet.</span>
+</div>
+<div id="setsOut" style="margin-top:10px;"></div>
+<div id="snapOut" class="muted" style="margin-top:10px;"></div>
+</section>
 </main>
 <script src="/static/app.js"></script>
 </body>

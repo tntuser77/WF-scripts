@@ -74,7 +74,6 @@ def _get_json(url: str) -> dict:
 def get_json(url: str) -> dict:
     """Rate-limited GET returning parsed JSON. All market traffic goes here."""
     return _get_json(url)
-    return resp.json()
 
 
 def _avg_medians(buckets: list) -> float | None:
@@ -125,11 +124,14 @@ def part_statistics(slug: str) -> dict:
     return out
 
 
-def top_orders(item_name: str) -> dict:
-    """Cheapest sell (preferring quantity>=6) plus average buy. Short cache."""
-    slug = relic_slug(item_name)
+def top_orders_by_slug(slug: str, min_qty: int = 1) -> dict:
+    """Cheapest sell with quantity >= min_qty plus average buy. Short cache.
+
+    Relics call this with min_qty=6 for bulk. Sets sell x1 so they use 1.
+    """
     now = time.time()
-    hit = _top_cache.get(slug)
+    key = f"{slug}|{min_qty}"
+    hit = _top_cache.get(key)
     if hit and now - hit["at"] < TOP_TTL_SECONDS:
         with _lock:
             _stats["cache_hits"] += 1
@@ -142,15 +144,20 @@ def top_orders(item_name: str) -> dict:
              if isinstance(e, dict) and "platinum" in e]
     buys = [float(e.get("platinum", 0)) for e in orders.get("buy", [])
             if isinstance(e, dict) and "platinum" in e]
-    big = [e for e in sells if int(e.get("quantity", 0)) >= 6]
+    big = [e for e in sells if int(e.get("quantity", 0)) >= min_qty]
     pool = big if big else sells
     sel = min(pool, key=lambda e: float(e.get("platinum", 0))) if pool else None
     out = {"market_link": f"https://warframe.market/items/{slug}",
            "sell_price": float(sel["platinum"]) if sel else None,
            "sell_qty": int(sel["quantity"]) if sel and "quantity" in sel else None,
            "avg_buy": round(sum(buys) / len(buys), 2) if buys else None}
-    _top_cache[slug] = {"at": now, "data": out}
+    _top_cache[key] = {"at": now, "data": out}
     return out
+
+
+def top_orders(item_name: str) -> dict:
+    """Cheapest relic sell (preferring quantity>=6) plus average buy."""
+    return top_orders_by_slug(relic_slug(item_name), min_qty=6)
 
 
 def stats() -> dict:
