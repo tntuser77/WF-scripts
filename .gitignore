@@ -1,0 +1,15 @@
+# venv + caches
+.venv/
+__pycache__/
+*.pyc
+Relics.json
+gold_part_price_cache.json
+*.log
+
+# local launcher profile (regenerated on launch)
+# NOTE: lives under %LOCALAPPDATA%, not the repo, listed here just in case
+WFM-Relic-Tools/
+
+# secrets
+web/.env
+.env

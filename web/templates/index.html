@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WFM local</title>
+<style>
+body { font-family: Segoe UI, Arial, sans-serif; background: #141417; color: #e8e8e8; margin: 0; font-size: 18px; line-height: 1.5; }
+header { padding: 16px 28px; background: #1e1e24; border-bottom: 1px solid #333; font-size: 20px; }
+main { max-width: 1400px; margin: 0 auto; padding: 24px; display: grid; gap: 24px; grid-template-columns: 1fr 1fr; }
+section { background: #1e1e24; border: 1px solid #333; border-radius: 10px; padding: 24px 26px; }
+section.wide { grid-column: 1 / -1; }
+h2 { margin: 0 0 14px; font-size: 24px; }
+input[type=text] { width: 100%; box-sizing: border-box; padding: 14px 16px; font-size: 19px; border-radius: 8px; border: 1px solid #555; background: #111; color: #eee; }
+.searchrow { display: flex; gap: 12px; }
+.searchrow input { flex: 1; }
+button { padding: 12px 20px; font-size: 17px; border-radius: 8px; border: 1px solid #555; background: #2c2c34; color: #eee; cursor: pointer; white-space: nowrap; }
+button:hover { background: #3a3a45; }
+table { width: 100%; border-collapse: collapse; font-size: 16px; }
+h3 { font-size: 20px; margin: 18px 0 6px; }
+.bucket { margin-bottom: 12px; }
+.tierhead td { background: #2a2a33; font-weight: bold; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #333; }
+a { color: #8ab4ff; }
+.muted { color: #aaa; font-size: 15px; }
+#searchOut { margin-top: 14px; font-size: 18px; }
+#alerts { font-size: 15px; color: #c9c9c9; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header style="display:flex; align-items:center; gap:12px;"><strong>WFM local</strong> <span class="muted">draft for review, runs on 127.0.0.1 only</span>
+<span style="flex:1;"></span>
+<span class="muted" style="font-size:16px;">Tile scanner:</span>
+<button id="tileBtn" onclick="tileToggle()">Start</button>
+<span id="tileState" class="muted" style="font-size:16px;"></span>
+<button onclick="quitApp()" title="Stop everything and close">Quit</button></header>
+<main>
+<section class="wide">
+<h2>Price search</h2>
+<div class="searchrow">
+<input type="text" id="q" placeholder="Axi H5 or Larkspur Barrel" onkeydown="if (event.key === 'Enter') doSearch()">
+<button onclick="doSearch()">Search</button>
+</div>
+<div id="searchOut" class="muted">Type a relic or part name.</div>
+</section>
+<section class="wide">
+<h2>Best relics board</h2>
+<div class="muted" id="boardMeta">Not running.</div>
+<div id="boardProg" style="margin:10px 0; display:none;">
+<div style="background:#111; border:1px solid #555; border-radius:8px; height:26px; overflow:hidden;">
+<div id="boardBar" style="height:100%; width:0%; background:#3d7a44;"></div>
+</div>
+<div class="muted" id="boardCurrent" style="margin-top:6px;"></div>
+</div>
+<div style="margin:10px 0; display:flex; gap:18px; align-items:center; flex-wrap:wrap;">
+<button id="boardBtn" onclick="boardToggle()">Start</button>
+<label for="minPart" style="font-size:17px;">Gold part from
+<select id="minPart" onchange="loadBoard()" style="font-size:17px; padding:8px; border-radius:8px; background:#111; color:#eee; border:1px solid #555;">
+<option value="40" selected>40p</option>
+<option value="50">50p</option>
+<option value="60">60p</option>
+</select></label>
+<label for="minProfit" style="font-size:17px;">Gold/hr over
+<select id="minProfit" onchange="loadBoard()" style="font-size:17px; padding:8px; border-radius:8px; background:#111; color:#eee; border:1px solid #555;">
+<option value="90" selected>90</option>
+<option value="100">100</option>
+<option value="110">110</option>
+<option value="120">120</option>
+<option value="130">130</option>
+</select></label>
+</div>
+<table><thead><tr><th>Relic</th><th>Relic price</th><th>Count</th><th>Gold part</th><th>Part 48h</th><th>Gold/hr</th></tr></thead>
+<tbody id="boardRows"><tr><td colspan="6" class="muted">No data yet.</td></tr></tbody></table>
+<h3 style="font-size:18px;">Live log</h3>
+<div id="boardLog" class="muted" style="font-size:15px;"></div>
+<div id="alerts"></div>
+</section>
+</section>
+<section class="wide">
+<h2>Relic inventory</h2>
+<div class="muted" id="dumpAge">Checking AlecaFrame dump...</div>
+<div style="margin-top:10px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+<button onclick="loadInv()">Load from AlecaFrame dump</button>
+<label for="tierMin" style="font-size:17px;">Show from
+<select id="tierMin" onchange="renderTiers()" style="font-size:17px; padding:8px; border-radius:8px; background:#111; color:#eee; border:1px solid #555;">
+<option value="30">30p</option>
+<option value="35">35p</option>
+<option value="40" selected>40p</option>
+</select> and up</label>
+</div>
+<div id="invProg" class="muted" style="margin-top:10px;"></div>
+<div id="invTiers" style="margin-top:10px;"></div>
+</section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
