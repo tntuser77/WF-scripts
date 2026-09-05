@@ -59,6 +59,7 @@ def _save(user: str, slugs: list, mode: str) -> None:
 def fetch_listed(user: str | None = None) -> dict:
     """{slugs, name, fetched, stale, mode}. Never raises, never leaks token."""
     import market_client
+    import market_items
     user = user or username()
     tok = token()
     cached = {}
@@ -75,12 +76,20 @@ def fetch_listed(user: str | None = None) -> dict:
     if tok:
         try:
             data = market_client.get_json_auth(
-                "https://api.warframe.market/v1/profile/orders", tok)
-            slugs = sorted({o.get("item", {}).get("url_name", "")
-                            for o in data.get("payload", {}).get("orders", [])
-                            if isinstance(o, dict)
-                            and o.get("order_type") == "sell"
-                            and o.get("item", {}).get("url_name")})
+                "https://api.warframe.market/v2/orders/my", tok)
+            orders = data.get("data", [])
+            by_id = market_items.index()["by_id"]
+            slugs = set()
+            for o in orders:
+                if not isinstance(o, dict) or o.get("type") != "sell":
+                    continue
+                item = o.get("item") or {}
+                slug = item.get("slug") or ""
+                if not slug and o.get("itemId") and o["itemId"] in by_id:
+                    slug = by_id[o["itemId"]].get("slug", "")
+                if slug:
+                    slugs.add(slug)
+            slugs = sorted(slugs)
             _save(user, slugs, "token")
             return {"slugs": slugs, "name": user, "fetched": time.time(),
                     "stale": False, "mode": "token"}

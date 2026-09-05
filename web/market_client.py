@@ -77,8 +77,8 @@ def get_json(url: str) -> dict:
 
 
 def get_json_auth(url: str, token: str) -> dict:
-    """Same budget, plus the v1 JWT header. Token never logged."""
-    return _get_json(url, {"Authorization": f"JWT {token}"})
+    """Same budget, plus the v2 Bearer header. Token never logged."""
+    return _get_json(url, {"Authorization": f"Bearer {token}"})
 
 
 def _avg_medians(buckets: list) -> float | None:
