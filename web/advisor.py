@@ -196,8 +196,10 @@ def sources_for_missing(missing_slug: str, owned_relics: dict) -> list:
 
 def build_report(owned_parts: dict | None = None,
                  owned_relics: dict | None = None,
-                 price_fn=None, set_price_fn=None) -> dict:
+                 price_fn=None, set_price_fn=None,
+                 listed: set | None = None) -> dict:
     """Full advisor report. price_fn/set_price_fn injectable for tests."""
+    listed = listed or set()
     if owned_parts is None or owned_relics is None:
         live = owned_from_dump()
         owned_parts = live["parts"] if owned_parts is None else owned_parts
@@ -232,6 +234,8 @@ def build_report(owned_parts: dict | None = None,
                "owned_1x": round(owned_1x, 1), "sell_now": sell_now,
                "set_sell": set_sell, "set_link": sp.get("link", ""),
                "ducats": ducats, "owned": dict(g["owned"]),
+               "listed_parts": sorted([p for p in parts if p in listed]),
+               "set_listed": (g["set_slug"] in listed) if g["set_slug"] else False,
                "prices": {p: prices.get(p, {}) for p in parts}}
         if not missing and g["set_slug"]:
             row["marginal"] = round((set_sell or 0) - 0, 1)
@@ -261,7 +265,7 @@ def build_report(owned_parts: dict | None = None,
         else:
             dust.append(row)
         for p in parts:
-            if g["owned"].get(p, 0) > 0 and p48(p) > 0:
+            if g["owned"].get(p, 0) > 0 and p48(p) > 0 and p not in listed:
                 sell_rank.append({"part": p, "count": g["owned"][p],
                                   "p48": prices.get(p, {}).get("p48"),
                                   "value": round(p48(p) * g["owned"][p], 1),
@@ -272,5 +276,8 @@ def build_report(owned_parts: dict | None = None,
     complete.sort(key=lambda r: (r.get("set_sell") or 0), reverse=True)
     dust.sort(key=lambda r: r["sell_now"], reverse=True)
     sell_rank.sort(key=lambda r: r["value"], reverse=True)
+    hidden = sum(1 for g in groups.values() for p in g["parts"]
+                 if g["owned"].get(p, 0) > 0 and p in listed)
     return {"near": near, "complete": complete, "dust": dust,
-            "sell_rank": sell_rank[:50]}
+            "sell_rank": sell_rank[:50], "hidden_listed": hidden,
+            "listed_count": len(listed)}

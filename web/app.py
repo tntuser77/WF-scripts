@@ -324,11 +324,13 @@ def api_board_refresh():
 
 
 _sets = {"state": "idle", "step": "", "done": 0, "total": 0,
-         "updated": None, "report": None, "plat": None, "error": None}
+         "updated": None, "report": None, "plat": None, "listed": None,
+         "error": None}
 
 
 def _sets_run() -> None:
     import advisor
+    import listings
     try:
         _sets.update({"state": "working", "error": None, "report": None,
                       "step": "reading AlecaFrame dump"})
@@ -371,10 +373,13 @@ def _sets_run() -> None:
                                  "avg_buy": t.get("avg_buy"),
                                  "link": t.get("market_link", "")}
         _sets["step"] = "grouping sets and sourcing missing pieces"
+        listed = listings.fetch_listed()
+        _sets["listed"] = listed
         report = advisor.build_report(
             live["parts"], live["relics"],
             price_fn=lambda slugs: {s: prices.get(s, {}) for s in slugs},
-            set_price_fn=lambda slugs: {s: set_prices.get(s, {}) for s in slugs})
+            set_price_fn=lambda slugs: {s: set_prices.get(s, {}) for s in slugs},
+            listed=set(listed.get("slugs", [])))
         _sets.update({"state": "done", "report": report,
                       "step": f"done: {len(groups)} sets",
                       "updated": time.strftime("%H:%M:%S")})

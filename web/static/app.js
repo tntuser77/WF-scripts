@@ -14,6 +14,8 @@ async function doSearch() {
 async function boardToggle() {
   const cur = document.getElementById("boardBtn").textContent;
   await fetch("/api/board/" + (cur === "Start" ? "start" : "stop"), {method: "POST"});
+  loadBoard();
+}
 async function loadSets() {
   await fetch("/api/sets");
   pollSets();
@@ -36,7 +38,7 @@ async function pollSets() {
     document.getElementById("setsBtn").disabled = false;
     wrap.style.display = "none";
     prog.textContent = d.step + (d.updated ? ". Updated " + d.updated + "." : "");
-    renderSets(d.report);
+    renderSets(d.report, d.listed);
   } else if (d.state === "error") {
     document.getElementById("setsBtn").disabled = false;
     wrap.style.display = "none";
@@ -46,24 +48,33 @@ async function pollSets() {
     prog.textContent = "Not priced yet.";
   }
 }
-function renderSets(rep) {
+function renderSets(rep, listed) {
   const out = document.getElementById("setsOut");
+  const badge = "<span style='color:#9fd08a;'> [listed]</span>";
   const near = (rep.near || []).map(x =>
     "<tr><td><a href='" + x.set_link + "' target='_blank'>" + x.set + "</a> (" +
-    x.have + "/" + x.need + ")</td><td>" + x.sell_now + "p</td><td>" +
+    x.have + "/" + x.need + ")" + (x.set_listed ? badge : "") + "</td><td>" + x.sell_now + "p</td><td>" +
     (x.set_sell != null ? x.set_sell + "p" : "?") + "</td><td>" +
     (x.marginal != null ? x.marginal + "p" : "?") + "</td><td>" +
     (x.buy != null ? x.buy + "p" : "?") + "</td><td>" +
     (x.source ? x.source.relic + " " + x.source.exp_runs + " runs, own " + x.source.owned : "?") +
     "</td><td>" + x.verdict + "</td></tr>").join("");
   const comp = (rep.complete || []).map(x =>
-    "<tr><td><a href='" + x.set_link + "' target='_blank'>" + x.set + "</a></td><td>" +
-    x.set_sell + "p</td></tr>").join("");
+    "<tr><td><a href='" + x.set_link + "' target='_blank'>" + x.set + "</a>" +
+    (x.set_listed ? badge : "") + "</td><td>" + x.set_sell + "p</td></tr>").join("");
   const sell = (rep.sell_rank || []).slice(0, 20).map(x =>
     "<tr" + (x.hold ? " style='background:#2d2a17;'" : "") + "><td>" + x.part + "</td><td>x" +
     x.count + "</td><td>" + x.p48 + "p</td><td>" + x.value + "p</td><td>" +
     (x.hold ? "hold, finishes " + x.set : x.set || "") + "</td></tr>").join("");
-  out.innerHTML =
+  let note;
+  if (listed && listed.name) {
+    note = "<div class='muted'>Checked " + listed.name + "'s listings. " +
+      (rep.hidden_listed || 0) + " owned copies already listed, hidden below." +
+      (listed.stale ? " Listing check is stale." : "") + "</div>";
+  } else {
+    note = "<div class='muted'>Add WFM_USERNAME to web/.env to hide items you already have listed.</div>";
+  }
+  out.innerHTML = note +
     "<h3>One piece short (" + (rep.near || []).length + ")</h3><table><thead><tr><th>Set</th><th>Sell parts</th><th>Set sells</th><th>Missing worth</th><th>Buy missing</th><th>Farm</th><th>Call</th></tr></thead><tbody>" +
     (near || "<tr><td colspan='7' class='muted'>None.</td></tr>") + "</tbody></table>" +
     "<h3>Complete, ready to list (" + (rep.complete || []).length + ")</h3><table><tbody>" +
@@ -92,8 +103,6 @@ async function diffSnaps() {
     "<br>Parts in: " + x.parts_in.map(e => e.part + " x" + e.n + " (" + e.value + "p)").join(", ") +
     "<br>Parts out: " + x.parts_out.map(e => e.part + " x" + e.n + " (" + e.value + "p)").join(", ") +
     "<br><span>Relic cost is opportunity cost. Bought and farmed relics look the same in the dump.</span>";
-}
-loadBoard();
 }
 async function loadBoard() {
   const mp = document.getElementById("minPart").value;
