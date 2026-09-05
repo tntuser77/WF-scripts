@@ -157,8 +157,9 @@ GOLD_PROFIT_PER_HOUR_THRESHOLD = 100  # ((gold_price/3) - relic_price) * 27/1.5 
 # Discord: Server Settings -> Integrations -> Webhooks -> New Webhook, copy URL.
 # User ID: enable Developer Mode (User Settings -> Advanced), right-click your
 # name -> Copy User ID. Leave DISCORD_WEBHOOK_URL empty to disable this.
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1538535663924940892/p0FDWhRzljParz_lc9qIcKjyd_-c25c_kHUvlhKoGcGDQJJLTjZ7zLgaBdlF-mAEx-EY"  # e.g. "https://discord.com/api/webhooks/123.../abc..."
-DISCORD_USER_ID = "945137263304671262"  # e.g. "123456789012345678"
+# Secrets live in the environment or web/.env, never in this file.
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
+DISCORD_USER_ID = os.environ.get("DISCORD_USER_ID", "")
 REQUEST_DELAY = 0.4  # matches your existing script's rate-limit pacing
 ALERT_COOLDOWN_SECONDS = 60  # don't re-confirm the same relic more than once a minute
 ALERT_BEEP_COUNT = 1  # how many beeps to play per alert
