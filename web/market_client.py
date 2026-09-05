@@ -60,9 +60,9 @@ def _throttle() -> None:
             now = time.monotonic()
 
 
-def _get_json(url: str) -> dict:
+def _get_json(url: str, headers: dict | None = None) -> dict:
     _throttle()
-    resp = _session.get(url, timeout=15)
+    resp = _session.get(url, timeout=15, headers=headers or {})
     with _lock:
         _stats["total"] += 1
         if resp.status_code == 429:
@@ -74,6 +74,11 @@ def _get_json(url: str) -> dict:
 def get_json(url: str) -> dict:
     """Rate-limited GET returning parsed JSON. All market traffic goes here."""
     return _get_json(url)
+
+
+def get_json_auth(url: str, token: str) -> dict:
+    """Same budget, plus the v1 JWT header. Token never logged."""
+    return _get_json(url, {"Authorization": f"JWT {token}"})
 
 
 def _avg_medians(buckets: list) -> float | None:

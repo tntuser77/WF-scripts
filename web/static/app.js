@@ -67,12 +67,14 @@ function renderSets(rep, listed) {
     x.count + "</td><td>" + x.p48 + "p</td><td>" + x.value + "p</td><td>" +
     (x.hold ? "hold, finishes " + x.set : x.set || "") + "</td></tr>").join("");
   let note;
-  if (listed && listed.name) {
+  if (listed && listed.mode === "token") {
     note = "<div class='muted'>Checked " + listed.name + "'s listings. " +
       (rep.hidden_listed || 0) + " owned copies already listed, hidden below." +
       (listed.stale ? " Listing check is stale." : "") + "</div>";
+  } else if (listed && listed.mode === "token-expired") {
+    note = "<div class='muted'>Market login expired. Paste a fresh JWT into web/.env (WFM_JWT=...) and rerun.</div>";
   } else {
-    note = "<div class='muted'>Add WFM_USERNAME to web/.env to hide items you already have listed.</div>";
+    note = "<div class='muted'>Already-listed check is off. Paste your JWT into web/.env as WFM_JWT to enable it.</div>";
   }
   out.innerHTML = note +
     "<h3>One piece short (" + (rep.near || []).length + ")</h3><table><thead><tr><th>Set</th><th>Sell parts</th><th>Set sells</th><th>Missing worth</th><th>Buy missing</th><th>Farm</th><th>Call</th></tr></thead><tbody>" +
