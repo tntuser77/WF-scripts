@@ -60,13 +60,19 @@ function renderSets(rep, listed) {
     (x.buy != null ? x.buy + "p" : "?") + "</td><td>" +
     (x.source ? x.source.relic + " " + x.source.exp_runs + " runs, own " + x.source.owned : "?") +
     "</td><td>" + x.verdict + "</td></tr>").join("");
-  const comp = (rep.complete || []).map(x =>
+  const comp = (rep.complete || []).map((x, i) =>
     "<tr><td><a href='" + x.set_link + "' target='_blank'>" + x.set + "</a>" +
-    (x.set_listed ? badge : "") + "</td><td>" + x.set_sell + "p</td></tr>").join("");
-  const sell = (rep.sell_rank || []).slice(0, 20).map(x =>
+    (x.set_listed ? badge : "") + "</td><td>" + x.set_sell + "p</td>" +
+    (x.set_listed ? "<td></td>" : "<td><button id='cset" + i + "' onclick=\"listPart('cset" + i + "', '" +
+    x.set + "', " + Math.floor(x.set_sell) + ", 1)\">List at " + Math.floor(x.set_sell) +
+    "p</button></td>") + "</tr>").join("");
+  const sell = (rep.sell_rank || []).slice(0, 20).map((x, i) =>
     "<tr" + (x.hold ? " style='background:#2d2a17;'" : "") + "><td>" + x.part + "</td><td>x" +
     x.count + "</td><td>" + x.p48 + "p</td><td>" + x.value + "p</td><td>" +
-    (x.hold ? "wait for " + x.set : x.set || "") + "</td></tr>").join("");
+    (x.hold ? "wait for " + x.set : x.set || "") + "</td>" +
+    "<td><button id='sell" + i + "' onclick=\"listPart('sell" + i + "', '" + x.part + "', " +
+    Math.floor(x.p48) + ", " + x.count + ")\">List at " + Math.floor(x.p48) +
+    "p</button></td></tr>").join("");
   let note;
   if (listed && listed.mode === "token") {
     note = "<div class='muted'>Checked " + listed.name + "'s listings. " +
@@ -78,7 +84,7 @@ function renderSets(rep, listed) {
     note = "<div class='muted'>Already-listed check is off. Paste your JWT into web/.env as WFM_JWT to enable it.</div>";
   }
   out.innerHTML = note +
-    "<h3>Sell piecemeal, 25p+ parts (highlighted = wait, set pays way more)</h3><table><thead><tr><th>Part</th><th>Count</th><th>48h</th><th>Value</th><th>Set</th></tr></thead><tbody>" + sell + "</tbody></table>" +
+    "<h3>Sell piecemeal, 25p+ parts (highlighted = wait, set pays way more)</h3><table><thead><tr><th>Part</th><th>Count</th><th>48h</th><th>Value</th><th>Set</th><th></th></tr></thead><tbody>" + sell + "</tbody></table>" +
     "<h3>Worth finishing (" + (rep.near || []).length + ")</h3><table><thead><tr><th>Set</th><th>Sell parts</th><th>Set sells</th><th>Missing worth</th><th>Buy missing</th><th>Farm</th><th>Call</th></tr></thead><tbody>" +
     (near || "<tr><td colspan='7' class='muted'>None.</td></tr>") + "</tbody></table>" +
     "<h3>Complete, ready to list (" + (rep.complete || []).length + ")</h3><table><tbody>" +
@@ -90,6 +96,18 @@ function renderSets(rep, listed) {
     "<h3>Ducat fodder (sub 25p parts, " + (rep.fodder_ducats || 0) +
     " ducats total)</h3><table><thead><tr><th>Part</th><th>Count</th><th>48h</th><th>Ducats each</th><th>Ducats</th></tr></thead><tbody>" +
     (fod || "<tr><td colspan='5' class='muted'>None.</td></tr>") + "</tbody></table>";
+}
+async function listPart(bid, part, price, count) {
+  if (!confirm("List " + count + "x " + part + " at " + price + "p each?")) return;
+  const btn = document.getElementById(bid);
+  btn.disabled = true;
+  btn.textContent = "Listing...";
+  const r = await fetch("/api/orders/sell", {method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({slug: part, price: price, quantity: count})});
+  const d = await r.json();
+  btn.textContent = d.ok ? "Listed" : "Failed";
+  if (!d.ok) { btn.disabled = false; alert("Order failed: " + d.error); }
 }
 async function loadBaro() {
   const r = await fetch("/api/baro");

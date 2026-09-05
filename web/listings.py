@@ -118,3 +118,38 @@ def fetch_listed(user: str | None = None) -> dict:
                 "mode": cached.get("mode", "public")}
     return {"slugs": [], "name": user, "fetched": None, "stale": True,
             "mode": "none"}
+
+
+def create_sell_order(slug: str, price: int, quantity: int) -> dict:
+    """List owned stock at a fixed unit price. Returns {ok, order_id/error}.
+
+    Visible immediately. Callers confirm with the user first, this does
+    not second guess them.
+    """
+    import market_client
+    import market_items
+    tok = token()
+    if not tok:
+        return {"ok": False, "error": "no token, add WFM_JWT to web/.env"}
+    if not slug or price < 1 or quantity < 1:
+        return {"ok": False, "error": "bad slug, price, or quantity"}
+    try:
+        entry = market_items.index()["by_slug"].get(slug, {})
+        item_id = entry.get("id")
+        if not item_id:
+            return {"ok": False, "error": f"unknown item {slug}"}
+        body = {"itemId": item_id, "type": "sell", "platinum": int(price),
+                "quantity": int(quantity), "visible": True}
+        if entry.get("bulkTradable"):
+            body["perTrade"] = 1
+        data = market_client.post_json_auth(
+            "https://api.warframe.market/v2/order", tok, body)
+        if CACHE_FILE.exists():
+            CACHE_FILE.unlink()
+        order = (data.get("data") or {})
+        return {"ok": True, "order_id": order.get("id")}
+    except Exception as e:
+        msg = str(e)
+        if "401" in msg or "403" in msg:
+            return {"ok": False, "error": "token expired, paste a fresh JWT"}
+        return {"ok": False, "error": msg[:160]}

@@ -81,6 +81,19 @@ def get_json_auth(url: str, token: str) -> dict:
     return _get_json(url, {"Authorization": f"Bearer {token}"})
 
 
+def post_json_auth(url: str, token: str, body: dict) -> dict:
+    """Rate-limited POST with Bearer auth. For order writes, not pricing."""
+    _throttle()
+    resp = _session.post(url, json=body, timeout=15,
+                         headers={"Authorization": f"Bearer {token}"})
+    with _lock:
+        _stats["total"] += 1
+        if resp.status_code == 429:
+            _stats["last_429"] = time.strftime("%H:%M:%S")
+    resp.raise_for_status()
+    return resp.json()
+
+
 def _avg_medians(buckets: list) -> float | None:
     medians = [float(e["median"]) for e in buckets
                if isinstance(e, dict) and e.get("median") is not None]

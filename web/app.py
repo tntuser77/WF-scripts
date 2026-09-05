@@ -415,6 +415,16 @@ def api_baro():
     return jsonify(baro.fetch())
 
 
+@app.post("/api/orders/sell")
+def api_order_sell():
+    import listings
+    body = request.get_json(silent=True) or {}
+    out = listings.create_sell_order(
+        str(body.get("slug", "")), int(body.get("price", 0) or 0),
+        int(body.get("quantity", 0) or 0))
+    return jsonify(out)
+
+
 @app.post("/api/snapshots/save")
 def api_snap_save():
     import snapshots
