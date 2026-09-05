@@ -22,15 +22,27 @@ async function pollSets() {
   const r = await fetch("/api/sets/status");
   const d = await r.json();
   const prog = document.getElementById("setsProg");
+  const wrap = document.getElementById("setsProgWrap");
+  const pct = d.total ? Math.round(100 * d.done / d.total) : 0;
   if (d.state === "working") {
-    prog.textContent = d.step + (d.total ? " (" + d.done + "/" + d.total + ")" : "...");
+    document.getElementById("setsBtn").disabled = true;
+    wrap.style.display = "block";
+    document.getElementById("setsBar").style.width = pct + "%";
+    document.getElementById("setsCurrent").textContent =
+      d.step + (d.total ? " (" + d.done + "/" + d.total + ", " + pct + "%)" : "...");
+    prog.textContent = "Pricing... " + pct + "%";
     setTimeout(pollSets, 1500);
   } else if (d.state === "done") {
+    document.getElementById("setsBtn").disabled = false;
+    wrap.style.display = "none";
     prog.textContent = d.step + (d.updated ? ". Updated " + d.updated + "." : "");
     renderSets(d.report);
   } else if (d.state === "error") {
+    document.getElementById("setsBtn").disabled = false;
+    wrap.style.display = "none";
     prog.textContent = "Error: " + d.error;
   } else {
+    wrap.style.display = "none";
     prog.textContent = "Not priced yet.";
   }
 }
@@ -59,11 +71,13 @@ function renderSets(rep) {
     "<h3>Best parts to sell (highlighted = hold, finishes a set)</h3><table><thead><tr><th>Part</th><th>Count</th><th>48h</th><th>Value</th><th>Set</th></tr></thead><tbody>" + sell + "</tbody></table>";
 }
 async function saveSnap() {
+  document.getElementById("snapOut").textContent = "Saving...";
   const r = await fetch("/api/snapshots/save", {method: "POST"});
   const d = await r.json();
   document.getElementById("snapOut").textContent = d.ok ? "Saved " + d.file + "." : "Error: " + d.error;
 }
 async function diffSnaps() {
+  document.getElementById("snapOut").textContent = "Diffing...";
   const l = await (await fetch("/api/snapshots/list")).json();
   const s = l.snaps || [];
   if (s.length < 2) { document.getElementById("snapOut").textContent = "Need two snapshots first."; return; }

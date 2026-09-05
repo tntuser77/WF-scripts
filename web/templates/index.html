@@ -93,15 +93,27 @@ a { color: #8ab4ff; }
 <div id="invTiers" style="margin-top:10px;"></div>
 </section>
 <section class="wide">
-<h2>Sets and sessions</h2>
+<h2>Best to list</h2>
 <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
-<button onclick="loadSets()">Price sets</button>
-<button onclick="saveSnap()">Save snapshot</button>
-<button onclick="diffSnaps()">Diff last two</button>
+<button id="setsBtn" onclick="loadSets()">Price sets</button>
 <span class="muted" id="setsProg">Not priced yet.</span>
 </div>
+<div id="setsProgWrap" style="margin:10px 0; display:none;">
+<div style="background:#111; border:1px solid #555; border-radius:8px; height:26px; overflow:hidden;">
+<div id="setsBar" style="height:100%; width:0%; background:#3d7a44;"></div>
+</div>
+<div class="muted" id="setsCurrent" style="margin-top:6px;"></div>
+</div>
 <div id="setsOut" style="margin-top:10px;"></div>
-<div id="snapOut" class="muted" style="margin-top:10px;"></div>
+</section>
+<section class="wide">
+<h2>Session tracker</h2>
+<div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+<button onclick="saveSnap()">Save snapshot</button>
+<button onclick="diffSnaps()">Diff last two</button>
+<span class="muted">Save one before you crack, one after. Plat gained is estimated at 48h medians.</span>
+</div>
+<div id="snapOut" class="muted" style="margin-top:10px;">No diff yet.</div>
 </section>
 </main>
 <script src="/static/app.js"></script>
