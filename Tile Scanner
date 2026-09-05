@@ -1,0 +1,497 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+import re
+import sys
+import time
+import threading
+from datetime import datetime
+from pathlib import Path
+
+try:
+    import winsound
+except ImportError:
+    winsound = None
+
+try:
+    import tkinter as tk
+except ImportError:
+    tk = None
+
+
+def resource_path(filename):
+    """Return a file path that works both normally and inside a PyInstaller EXE."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / filename
+    return Path(__file__).resolve().parent / filename
+
+
+GOOD_TILE_SOUND = resource_path("tilescanner.wav")
+
+
+STOP_EVENT = threading.Event()
+OVERLAY_LOCK = threading.Lock()
+OVERLAY_DATA = {
+    "status": "Waiting for map...",
+    "rooms": [],
+    "total": 0,
+    "good": False,
+    "color": "#f0c674",
+}
+
+
+def set_overlay(status, rooms=None, total=0, good=False, color="#f0c674"):
+    with OVERLAY_LOCK:
+        OVERLAY_DATA["status"] = status
+        OVERLAY_DATA["rooms"] = rooms or []
+        OVERLAY_DATA["total"] = total
+        OVERLAY_DATA["good"] = good
+        OVERLAY_DATA["color"] = color
+
+
+class TileOverlay:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("tilescaner")
+        self.root.overrideredirect(True)
+        self.root.attributes("-topmost", True)
+        self.root.attributes("-alpha", 0.94)
+        self.root.configure(bg="black")
+
+        width = 500
+        height = 92
+        x = (self.root.winfo_screenwidth() - width) // 2
+        self.root.geometry(f"{width}x{height}+{x}+12")
+
+        self.status_label = tk.Label(
+            self.root,
+            text="Waiting for map...",
+            bg="black",
+            fg="#f0c674",
+            font=("Segoe UI", 14, "bold"),
+        )
+        self.status_label.pack(pady=(8, 1))
+
+        self.rooms_label = tk.Label(
+            self.root,
+            text="",
+            bg="black",
+            fg="white",
+            font=("Segoe UI", 10),
+        )
+        self.rooms_label.pack()
+
+        self.hint_label = tk.Label(
+            self.root,
+            text="drag to move • right-click or Esc to close",
+            bg="black",
+            fg="#777777",
+            font=("Segoe UI", 8),
+        )
+        self.hint_label.pack(pady=(2, 0))
+
+        self.drag_x = 0
+        self.drag_y = 0
+        self.root.bind("<Button-1>", self.start_drag)
+        self.root.bind("<B1-Motion>", self.drag)
+        self.root.bind("<Button-3>", self.close)
+        self.root.bind("<Escape>", self.close)
+
+        self.refresh()
+
+    def start_drag(self, event):
+        self.drag_x = event.x
+        self.drag_y = event.y
+
+    def drag(self, event):
+        x = self.root.winfo_x() + event.x - self.drag_x
+        y = self.root.winfo_y() + event.y - self.drag_y
+        self.root.geometry(f"+{x}+{y}")
+
+    def close(self, event=None):
+        STOP_EVENT.set()
+        self.root.destroy()
+
+    def refresh(self):
+        if STOP_EVENT.is_set():
+            try:
+                self.root.destroy()
+            except tk.TclError:
+                pass
+            return
+
+        with OVERLAY_LOCK:
+            data = dict(OVERLAY_DATA)
+
+        self.status_label.config(
+            text=data["status"],
+            fg=data["color"],
+        )
+
+        if data["rooms"]:
+            room_text = "   |   ".join(
+                f"{name} ({exos})" for name, exos in data["rooms"]
+            )
+        else:
+            room_text = ""
+
+        self.rooms_label.config(text=room_text)
+        self.root.after(150, self.refresh)
+
+    def run(self):
+        self.root.mainloop()
+
+
+def run_overlay():
+    if tk is None:
+        print("Overlay unavailable: tkinter is not installed.")
+        return
+
+    try:
+        TileOverlay().run()
+    except Exception as error:
+        print(f"Overlay error: {error}")
+
+
+ROOMS = {
+    87: ("Hall of Legems", 3),
+    105: ("Brig", 3),
+    119: ("Agrizone", 3),
+    120: ("Serenity", 4),
+    142: ("Habitation Zone", 3),
+    144: ("Lunaro", 3),
+    162: ("Angel Roost", 4),
+    164: ("Amphitheatre", 3),
+    226: ("Albrecht's Park", 4),
+    274: ("Cargo Bay", 3),
+    402: ("Hangar", 5),
+    493: ("Schoolyard", 4),
+}
+
+
+TileData = {
+    87: {"name": "Hall of legends", "value": 3},
+    105: {"name": "Brig", "value": 3},
+    119: {"name": "Garden", "value": 3},
+    120: {"name": "Serenity", "value": 4},
+    142: {"name": "Habitat", "value": 3},
+    144: {"name": "Court", "value": 3},
+    162: {"name": "Angel roost", "value": 4},
+    164: {"name": "Amphi", "value": 3},
+    226: {"name": "Albrecht park", "value": 4},
+    274: {"name": "Cargo bay", "value": 3},
+    402: {"name": "Hangar", "value": 5},
+    493: {"name": "Schoolyard", "value": 4}
+}
+
+ROOM_ZONES = (2, 6, 8)
+
+bridge_pattern = re.compile(
+    r"HighLevelGraph\s+setup\s+(\d+)\s+implicit\s+bridges\s+for\s+zone\s+(\d+)",
+    re.I,
+)
+
+layout_pattern = re.compile(
+    r"/Lotus/Levels/Proc/Zariman/ZarimanDirectionalSurvival/(LD[^\s\\/]+\.lp)",
+    re.I,
+)
+
+mission_end_pattern = re.compile(
+    r"TopMenu\.lua:\s*Abort|Returning to ship|Mission\s+(?:failed|complete)",
+    re.I,
+)
+
+log_prefix_pattern = re.compile(r"^\s*[0-9.]+\s+")
+
+
+direct_room_patterns = [
+    (re.compile(r"/Layer255/Layer(\d+)/CsgZone\d+\s+\[IntLivingQuartersBackdrop\]", re.I), "Habitation Zone"),
+    (re.compile(r"/Layer255/Layer(\d+)/CsgZone\d+\s+\[IntShuttleBayBackdrop\]", re.I), "Hangar"),
+    (re.compile(r"/Layer255/Layer(\d+)/CsgZone\d+\s+\[IntParkBBackdrop\]", re.I), "Serenity"),
+    (re.compile(r"/Layer255/Layer(\d+)/CsgZone\d+\s+\[IntParkBackdrop\]", re.I), "Albrecht's Park"),
+    (re.compile(r"/Layer255/Layer(\d+)/CsgZone\d+\s+\[IntLunaroCourtBackdrop\]", re.I), "Lunaro"),
+]
+
+
+class CascadeScanner:
+    def __init__(self, once=False, verbose=False):
+        self.once = once
+        self.verbose = verbose
+        self.finished = False
+        self.reset(False)
+
+    def reset(self, active=True):
+        self.active = active
+        self.layout = None
+        self.bridges = {}
+        self.direct_rooms = {}
+        self.printed = False
+
+        if active:
+            set_overlay("Scanning...", color="#f0c674")
+
+    def clean_line(self, line):
+        line = line.replace("\x00", "").rstrip("\r\n")
+        return log_prefix_pattern.sub("", line, count=1).strip()
+
+    def read_layout(self, line):
+        match = layout_pattern.search(line)
+        if not match:
+            return
+
+        layout = match.group(1)
+        if not self.active:
+            self.reset()
+        elif self.layout and self.layout.lower() != layout.lower():
+            self.reset()
+
+        self.layout = layout
+
+    def read_direct_room(self, line):
+        if not self.active:
+            return
+
+        for pattern, room_name in direct_room_patterns:
+            match = pattern.search(line)
+            if not match:
+                continue
+
+            layer = int(match.group(1))
+            if layer in ROOM_ZONES:
+                self.direct_rooms[layer] = room_name
+            break
+
+    def read_bridge(self, line):
+        if not self.active:
+            return
+
+        match = bridge_pattern.search(line)
+        if not match:
+            return
+
+        fingerprint = int(match.group(1))
+        zone = int(match.group(2))
+
+        if zone not in ROOM_ZONES:
+            return
+
+        self.bridges[zone] = fingerprint
+
+        if self.verbose:
+            print(f"[debug] zone {zone} = {fingerprint}")
+
+        self.print_result()
+
+    def print_result(self):
+        if self.printed or not all(zone in self.bridges for zone in ROOM_ZONES):
+            return
+
+        self.printed = True
+        rooms = []
+        unknown = []
+
+        for zone in ROOM_ZONES:
+            fingerprint = self.bridges[zone]
+            room = ROOMS.get(fingerprint)
+
+            if room is None:
+                unknown.append((zone, fingerprint))
+            else:
+                rooms.append((zone, room[0], room[1]))
+
+        print()
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] tilescaner")
+
+        if unknown:
+            print("Unknown room detected:")
+            for zone, fingerprint in unknown:
+                print(f"  Layer {zone}: {fingerprint}")
+
+            unknown_text = ", ".join(
+                f"Layer {zone}: {fingerprint}" for zone, fingerprint in unknown
+            )
+            set_overlay(
+                f"UNKNOWN TILE - {unknown_text}",
+                color="#f0c674",
+            )
+        else:
+            width = max(len(name) for _, name, _ in rooms)
+            total = sum(exos for _, _, exos in rooms)
+
+            for _, name, exos in rooms:
+                print(f"  {name:<{width}}  {exos}")
+
+            print(f"  {'Total':<{width}}  {total}")
+
+            blocked_rooms = {"Lunaro", "Amphitheatre"}
+            has_blocked_room = any(name in blocked_rooms for _, name, _ in rooms)
+            good_tile = total >= 11 and not has_blocked_room
+
+            print(f"  Good Tile: {good_tile}")
+
+            overlay_rooms = [(name, exos) for _, name, exos in rooms]
+            if good_tile:
+                set_overlay(
+                    f"GOOD TILE - Total: {total}",
+                    rooms=overlay_rooms,
+                    total=total,
+                    good=True,
+                    color="#67d17a",
+                )
+                if winsound is not None:
+                    try:
+                        if GOOD_TILE_SOUND.exists():
+                            winsound.PlaySound(
+                                str(GOOD_TILE_SOUND),
+                                winsound.SND_FILENAME | winsound.SND_ASYNC,
+                            )
+                        else:
+                            winsound.MessageBeep(winsound.MB_ICONASTERISK)
+                    except RuntimeError:
+                        pass
+            else:
+                set_overlay(
+                    f"BAD TILE - Total: {total}",
+                    rooms=overlay_rooms,
+                    total=total,
+                    good=False,
+                    color="#e06c75",
+                )
+
+            for zone, name, _ in rooms:
+                direct_name = self.direct_rooms.get(zone)
+                if direct_name and direct_name != name:
+                    print(f"  Warning: Layer {zone} matched {name}, log says {direct_name}")
+
+        print()
+
+        if self.once:
+            self.finished = True
+
+    def process_line(self, raw_line):
+        line = self.clean_line(raw_line)
+        if not line:
+            return
+
+        if re.search(r"Host loading .*SolNode232", line, re.I):
+            self.reset()
+
+        if "missionType=MT_VOID_CASCADE" in line and not self.active:
+            self.reset()
+
+        self.read_layout(line)
+        self.read_direct_room(line)
+        self.read_bridge(line)
+
+        if self.active and mission_end_pattern.search(line):
+            self.active = False
+
+
+def default_log_path():
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if not local_app_data:
+        raise RuntimeError("LOCALAPPDATA is not set. Use --log to choose EE.log manually.")
+    return Path(local_app_data) / "Warframe" / "EE.log"
+
+
+def watch_log(path, scanner, from_start=False):
+    print("fen's tile scanner")
+    print(f"EE.log: {path}")
+    print("join the commons as host, ctrl+c to stop program")
+
+    file = None
+    file_id = None
+
+    try:
+        while not scanner.finished and not STOP_EVENT.is_set():
+            try:
+                stat = path.stat()
+                current_id = (stat.st_dev, stat.st_ino)
+
+                if file is None or current_id != file_id or file.tell() > stat.st_size:
+                    if file:
+                        file.close()
+
+                    file = path.open("rb")
+                    file_id = current_id
+
+                    if not from_start:
+                        file.seek(0, os.SEEK_END)
+
+                    from_start = False
+
+                position = file.tell()
+                raw_line = file.readline()
+
+                if not raw_line:
+                    time.sleep(0.1)
+                    continue
+
+                if not raw_line.endswith(b"\n"):
+                    file.seek(position)
+                    time.sleep(0.1)
+                    continue
+
+                scanner.process_line(raw_line.decode("utf-8", errors="replace"))
+
+            except (FileNotFoundError, PermissionError):
+                if file:
+                    file.close()
+                    file = None
+                time.sleep(0.5)
+
+    except KeyboardInterrupt:
+        print("\nStopped.")
+    finally:
+        if file:
+            file.close()
+
+
+def replay(path, scanner):
+    with path.open("r", encoding="utf-8", errors="replace") as file:
+        for line in file:
+            scanner.process_line(line)
+            if scanner.finished:
+                break
+
+
+def get_args():
+    parser = argparse.ArgumentParser(description="Void Cascade room scanner for EE.log")
+    parser.add_argument("--log", type=Path, help="Path to EE.log")
+    parser.add_argument("--from-start", action="store_true", help="Read the current EE.log from the beginning")
+    parser.add_argument("--once", action="store_true", help="Exit after finding one layout")
+    parser.add_argument("--verbose", action="store_true", help="Show debug output")
+    parser.add_argument("--replay", type=Path, help="Read a saved log instead of watching EE.log")
+    parser.add_argument("--no-overlay", action="store_true", help="Run without the on-screen overlay")
+    return parser.parse_args()
+
+
+def main():
+    args = get_args()
+    scanner = CascadeScanner(once=args.once, verbose=args.verbose)
+
+    if args.replay:
+        replay(args.replay, scanner)
+        if not scanner.printed:
+            print("No complete Void Cascade layout found.")
+            return 1
+        return 0
+
+    try:
+        log_path = args.log or default_log_path()
+    except RuntimeError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 2
+
+    if not args.no_overlay:
+        overlay_thread = threading.Thread(target=run_overlay, daemon=True)
+        overlay_thread.start()
+
+    watch_log(log_path, scanner, args.from_start)
+    STOP_EVENT.set()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
