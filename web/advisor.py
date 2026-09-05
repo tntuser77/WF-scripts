@@ -58,7 +58,15 @@ def owned_from_dump(data: dict | None = None) -> dict:
     ducats = None
     wfcd = {r["uniqueName"]: r for r in json.loads(WFCD_CACHE.read_text(encoding="utf-8"))} \
         if WFCD_CACHE.exists() else {}
-    for it in data.get("MiscItems", []):
+    # Tradable parts hide in three places: MiscItems (most components),
+    # Recipes (all blueprints), RawUpgrades (arcanes). Same ItemType can
+    # show in more than one, counts add up.
+    stackable = []
+    for section in ("MiscItems", "Recipes", "RawUpgrades"):
+        items = data.get(section, [])
+        if isinstance(items, list):
+            stackable.extend(items)
+    for it in stackable:
         t = it.get("ItemType", "")
         c = it.get("ItemCount", 0)
         if c <= 0:
@@ -96,6 +104,29 @@ def _tradable_parts(owned_parts: dict) -> dict:
     """Keep only slugs with cached v2 detail (prime parts, not resources)."""
     det = market_items.load_details()
     return {s: c for s, c in owned_parts.items() if s in det}
+
+
+def prime_slugs(owned_parts: dict) -> list:
+    """Owned slugs whose catalog entry is tagged prime. Offline, no calls."""
+    try:
+        idx = market_items.index()
+    except Exception:
+        return []
+    return sorted(s for s in owned_parts
+                  if "prime" in (idx["by_slug"].get(s, {}).get("tags") or []))
+
+
+def ensure_details(slugs: list, progress=None) -> None:
+    """Fetch v2 detail for slugs missing from the infinite disk cache."""
+    known = market_items.load_details()
+    missing = [s for s in slugs if s not in known]
+    for i, s in enumerate(missing, 1):
+        if progress:
+            progress(i, len(missing), s)
+        try:
+            market_items.fetch_detail(s)
+        except Exception:
+            continue
 
 
 def price_parts(slugs: list) -> dict:

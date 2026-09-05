@@ -336,6 +336,14 @@ def _sets_run() -> None:
                       "step": "reading AlecaFrame dump"})
         live = advisor.owned_from_dump()
         _sets["plat"] = live["plat"]
+        _sets["step"] = "resolving set membership for new parts"
+        with _price_lock:
+            advisor.ensure_details(
+                advisor.prime_slugs(live["parts"]),
+                progress=lambda i, n, s: _sets.update(
+                    {"step": f"resolving sets {i}/{n}: {s}"}))
+            if _sets.get("state") != "working":
+                return
         tradable = advisor._tradable_parts(live["parts"])
         groups = __import__("sets").group_owned(tradable) if tradable else {}
         part_slugs = sorted({p for g in groups.values() for p in g["parts"]})
