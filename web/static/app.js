@@ -51,28 +51,14 @@ async function pollSets() {
 }
 function renderSets(rep, listed) {
   const out = document.getElementById("setsOut");
-  const badge = "<span style='color:#9fd08a;'> [listed]</span>";
-  const near = (rep.near || []).map(x =>
-    "<tr><td><a href='" + x.set_link + "' target='_blank'>" + x.set + "</a> (" +
-    x.have + "/" + x.need + ")" + (x.set_listed ? badge : "") + "</td><td>" + x.sell_now + "p</td><td>" +
-    (x.set_sell != null ? x.set_sell + "p" : "?") + "</td><td>" +
-    (x.marginal != null ? x.marginal + "p" : "?") + "</td><td>" +
-    (x.buy != null ? x.buy + "p" : "?") + "</td><td>" +
-    (x.source ? x.source.relic + " " + x.source.exp_runs + " runs, own " + x.source.owned : "?") +
-    "</td><td>" + x.verdict + "</td></tr>").join("");
-  const comp = (rep.complete || []).map((x, i) =>
-    "<tr><td><a href='" + x.set_link + "' target='_blank'>" + x.set + "</a>" +
-    (x.set_listed ? badge : "") + "</td><td>" + x.set_sell + "p</td>" +
-    (x.set_listed ? "<td></td>" : "<td><button id='cset" + i + "' onclick=\"listPart('cset" + i + "', '" +
-    x.set + "', " + Math.floor(x.set_sell) + ", 1)\">List at " + Math.floor(x.set_sell) +
-    "p</button></td>") + "</tr>").join("");
-  const sell = (rep.sell_rank || []).slice(0, 20).map((x, i) =>
-    "<tr" + (x.hold ? " style='background:#2d2a17;'" : "") + "><td>" + x.part + "</td><td>x" +
-    x.count + "</td><td>" + x.p48 + "p</td><td>" + x.value + "p</td><td>" +
-    (x.hold ? "wait for " + x.set : x.set || "") + "</td>" +
-    "<td><button id='sell" + i + "' onclick=\"listPart('sell" + i + "', '" + x.part + "', " +
-    Math.floor(x.p48) + ", " + x.count + ")\">List at " + Math.floor(x.p48) +
-    "p</button></td></tr>").join("");
+  const acts = (rep.actions || []).map((x, i) => {
+    const price = Math.floor(x.unit);
+    const btn = "<button id='act" + i + "' onclick=\"listPart('act" + i + "', '" +
+      x.item + "', " + price + ", " + x.qty + ")\">List at " + price + "p</button>";
+    return "<tr" + (x.hold ? " style='background:#2d2a17;'" : "") + "><td>" + x.item + "</td><td>" +
+      x.kind + "</td><td>x" + x.qty + "</td><td>" + x.unit + "p</td><td>" + x.value +
+      "p</td><td>" + (x.note || "") + "</td><td>" + btn + "</td></tr>";
+  }).join("");
   let note;
   if (listed && listed.mode === "token") {
     note = "<div class='muted'>Checked " + listed.name + "'s listings. " +
@@ -84,11 +70,8 @@ function renderSets(rep, listed) {
     note = "<div class='muted'>Already-listed check is off. Paste your JWT into web/.env as WFM_JWT to enable it.</div>";
   }
   out.innerHTML = note +
-    "<h3>Sell piecemeal, 25p+ parts (highlighted = wait, set pays way more)</h3><table><thead><tr><th>Part</th><th>Count</th><th>48h</th><th>Value</th><th>Set</th><th></th></tr></thead><tbody>" + sell + "</tbody></table>" +
-    "<h3>Worth finishing (" + (rep.near || []).length + ")</h3><table><thead><tr><th>Set</th><th>Sell parts</th><th>Set sells</th><th>Missing worth</th><th>Buy missing</th><th>Farm</th><th>Call</th></tr></thead><tbody>" +
-    (near || "<tr><td colspan='7' class='muted'>None.</td></tr>") + "</tbody></table>" +
-    "<h3>Complete, ready to list (" + (rep.complete || []).length + ")</h3><table><tbody>" +
-    (comp || "<tr><td class='muted'>None.</td></tr>") + "</tbody></table>";
+    "<h3>Best to sell, most valuable first (highlighted = keep one back, set pays more)</h3><table><thead><tr><th>Item</th><th>Kind</th><th>List qty</th><th>Each</th><th>Value</th><th>Note</th><th></th></tr></thead><tbody>" +
+    (acts || "<tr><td colspan='7' class='muted'>None.</td></tr>") + "</tbody></table>";
   const fod = (rep.fodder || []).slice(0, 15).map(x =>
     "<tr><td>" + x.part + "</td><td>x" + x.count + "</td><td>" + x.p48 +
     "p</td><td>" + x.ducats_each + "</td><td>" + x.ducats + "</td></tr>").join("");

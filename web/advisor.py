@@ -254,6 +254,7 @@ def build_report(owned_parts: dict | None = None,
 
     near, complete, dust = [], [], []
     sell_rank = []
+    actions = []
     for g in groups.values():
         parts = g["parts"]
         owned_1x = sum(p48(p) for p in parts if g["owned"].get(p, 0) > 0)
@@ -272,58 +273,74 @@ def build_report(owned_parts: dict | None = None,
                "listed_parts": sorted([p for p in parts if p in listed]),
                "set_listed": (g["set_slug"] in listed) if g["set_slug"] else False,
                "prices": {p: prices.get(p, {}) for p in parts}}
-        if not missing and g["set_slug"]:
-            if (set_sell or 0) >= MIN_TRADE_PLAT:
-                row["marginal"] = round((set_sell or 0) - 0, 1)
-                complete.append(row)
-        elif len(missing) == 1 and g["set_slug"]:
-            if not set_sell or set_sell < MIN_TRADE_PLAT:
-                pass  # finished set would not clear one trade, piecemeal only
-            else:
-                m = missing[0]
-                marginal = set_sell - owned_1x
+        worth_set = bool(g["set_slug"] and set_sell and set_sell >= MIN_TRADE_PLAT)
+        if not missing and worth_set:
+            row["marginal"] = round(set_sell - 0, 1)
+            complete.append(row)
+            keep_back, set_note = True, "complete set, list it"
+        elif len(missing) == 1 and worth_set:
+            m = missing[0]
+            marginal = set_sell - owned_1x
+            buy = None
+            try:
+                buy = market_client.top_orders_by_slug(m, min_qty=1).get("sell_price")
+            except Exception:
                 buy = None
-                try:
-                    buy = market_client.top_orders_by_slug(m, min_qty=1).get("sell_price")
-                except Exception:
-                    buy = None
-                srcs = sources_for_missing(m, owned_relics)
-                best = next((s for s in srcs if s["owned"] > 0), srcs[0] if srcs else None)
-                if marginal < MIN_TRADE_PLAT:
-                    verdict = "sell piecemeal, set premium under one trade"
-                elif buy and buy >= MIN_TRADE_PLAT and buy < marginal:
-                    verdict = f"buy {m} at {buy}p, finish for {set_sell}p"
-                elif best and best["owned"] >= (best["exp_runs"] or 999):
-                    verdict = f"farm {best['relic']} ({best['exp_runs']} runs, own {best['owned']})"
-                elif buy and buy < MIN_TRADE_PLAT:
-                    verdict = "farm it, buying wastes a trade"
-                elif marginal > 0:
-                    verdict = "wait for the set" if marginal >= MIN_TRADE_PLAT else "sell piecemeal"
-                else:
-                    verdict = "sell piecemeal"
-                row.update({"marginal": round(marginal, 1),
-                            "buy": buy, "source": best, "sources": srcs[:3],
-                            "verdict": verdict})
-                near.append(row)
+            srcs = sources_for_missing(m, owned_relics)
+            best = next((s for s in srcs if s["owned"] > 0), srcs[0] if srcs else None)
+            if marginal < MIN_TRADE_PLAT:
+                verdict = "sell piecemeal, set premium under one trade"
+                keep_back = False
+            elif buy and buy >= MIN_TRADE_PLAT and buy < marginal:
+                verdict = f"buy {m} at {buy}p, finish for {set_sell}p"
+                keep_back = True
+            elif best and best["owned"] >= (best["exp_runs"] or 999):
+                verdict = f"farm {best['relic']} ({best['exp_runs']} runs, own {best['owned']})"
+                keep_back = True
+            elif buy and buy < MIN_TRADE_PLAT:
+                verdict = "farm it, buying wastes a trade"
+                keep_back = True
+            elif marginal > 0:
+                verdict = "wait for the set"
+                keep_back = True
+            else:
+                verdict = "sell piecemeal"
+                keep_back = False
+            row.update({"marginal": round(marginal, 1),
+                        "buy": buy, "source": best, "sources": srcs[:3],
+                        "verdict": verdict})
+            near.append(row)
+            set_note = ("wait for " + g["set_slug"] + ", " + verdict) if keep_back else ""
         else:
             dust.append(row)
-        # Piecemeal list: 25p+ parts only. Hold only when finishing the set
-        # earns at least one trade over parting out, else sell the part.
-        worth_finishing = (len(missing) == 1 and set_sell and
-                           (set_sell - owned_1x) >= MIN_TRADE_PLAT)
+            keep_back, set_note = False, ""
+        # One ranked list. Keep one copy back for any set worth finishing,
+        # list only spares. Complete sets appear as their own row.
+        if not missing and worth_set and not row["set_listed"]:
+            actions.append({"kind": "set", "item": g["set_slug"], "qty": 1,
+                            "unit": set_sell, "value": set_sell,
+                            "note": "complete set", "hold": False,
+                            "link": sp.get("link", "")})
         for p in parts:
-            if (g["owned"].get(p, 0) > 0 and p48(p) >= MIN_TRADE_PLAT
-                    and p not in listed):
-                sell_rank.append({"part": p, "count": g["owned"][p],
-                                  "p48": prices.get(p, {}).get("p48"),
-                                  "value": round(p48(p) * g["owned"][p], 1),
-                                  "set": g["set_slug"],
-                                  "hold": bool(worth_finishing),
-                                  "link": prices.get(p, {}).get("link", "")})
+            n = g["owned"].get(p, 0)
+            if n <= 0 or p48(p) < MIN_TRADE_PLAT or p in listed:
+                continue
+            reserve = 1 if keep_back and n >= 1 else 0
+            qty = n - reserve
+            if qty <= 0:
+                continue
+            actions.append({"kind": "part", "item": p, "qty": qty,
+                            "unit": prices.get(p, {}).get("p48"),
+                            "value": round(p48(p) * qty, 1),
+                            "note": (f"keep 1 for {g['set_slug']}, " + set_note
+                                     if keep_back else ""),
+                            "hold": bool(keep_back),
+                            "link": prices.get(p, {}).get("link", "")})
     near.sort(key=lambda r: (r.get("marginal") or 0), reverse=True)
     complete.sort(key=lambda r: (r.get("set_sell") or 0), reverse=True)
     dust.sort(key=lambda r: r["sell_now"], reverse=True)
     sell_rank.sort(key=lambda r: r["value"], reverse=True)
+    actions.sort(key=lambda r: r["value"], reverse=True)
     hidden = sum(1 for g in groups.values() for p in g["parts"]
                  if g["owned"].get(p, 0) > 0 and p in listed)
     # Ducat fodder: sub trade floor parts ranked by total ducats. These
@@ -345,4 +362,5 @@ def build_report(owned_parts: dict | None = None,
     return {"near": near, "complete": complete, "dust": dust,
             "sell_rank": sell_rank[:50], "hidden_listed": hidden,
             "listed_count": len(listed), "fodder": fodder[:30],
-            "fodder_ducats": sum(f["ducats"] for f in fodder)}
+            "fodder_ducats": sum(f["ducats"] for f in fodder),
+            "actions": actions[:30]}
