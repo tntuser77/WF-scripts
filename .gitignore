@@ -8,6 +8,8 @@ market_catalog.json
 market_detail_cache.json
 set_cache.json
 snapshots/
+my_listings_cache.json
+baro_cache.json
 *.log
 
 # local launcher profile (regenerated on launch)
