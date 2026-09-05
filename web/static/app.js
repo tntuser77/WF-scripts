@@ -65,7 +65,7 @@ function renderSets(rep, listed) {
   const sell = (rep.sell_rank || []).slice(0, 20).map(x =>
     "<tr" + (x.hold ? " style='background:#2d2a17;'" : "") + "><td>" + x.part + "</td><td>x" +
     x.count + "</td><td>" + x.p48 + "p</td><td>" + x.value + "p</td><td>" +
-    (x.hold ? "hold, finishes " + x.set : x.set || "") + "</td></tr>").join("");
+    (x.hold ? "wait for " + x.set : x.set || "") + "</td></tr>").join("");
   let note;
   if (listed && listed.mode === "token") {
     note = "<div class='muted'>Checked " + listed.name + "'s listings. " +
@@ -77,11 +77,11 @@ function renderSets(rep, listed) {
     note = "<div class='muted'>Already-listed check is off. Paste your JWT into web/.env as WFM_JWT to enable it.</div>";
   }
   out.innerHTML = note +
-    "<h3>One piece short (" + (rep.near || []).length + ")</h3><table><thead><tr><th>Set</th><th>Sell parts</th><th>Set sells</th><th>Missing worth</th><th>Buy missing</th><th>Farm</th><th>Call</th></tr></thead><tbody>" +
+    "<h3>Sell piecemeal, 25p+ parts (highlighted = wait, set pays way more)</h3><table><thead><tr><th>Part</th><th>Count</th><th>48h</th><th>Value</th><th>Set</th></tr></thead><tbody>" + sell + "</tbody></table>" +
+    "<h3>Worth finishing (" + (rep.near || []).length + ")</h3><table><thead><tr><th>Set</th><th>Sell parts</th><th>Set sells</th><th>Missing worth</th><th>Buy missing</th><th>Farm</th><th>Call</th></tr></thead><tbody>" +
     (near || "<tr><td colspan='7' class='muted'>None.</td></tr>") + "</tbody></table>" +
     "<h3>Complete, ready to list (" + (rep.complete || []).length + ")</h3><table><tbody>" +
-    (comp || "<tr><td class='muted'>None.</td></tr>") + "</tbody></table>" +
-    "<h3>Best parts to sell (highlighted = hold, finishes a set)</h3><table><thead><tr><th>Part</th><th>Count</th><th>48h</th><th>Value</th><th>Set</th></tr></thead><tbody>" + sell + "</tbody></table>";
+    (comp || "<tr><td class='muted'>None.</td></tr>") + "</tbody></table>";
 }
 async function saveSnap() {
   document.getElementById("snapOut").textContent = "Saving...";
