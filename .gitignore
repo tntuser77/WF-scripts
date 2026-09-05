@@ -4,6 +4,9 @@ __pycache__/
 *.pyc
 Relics.json
 gold_part_price_cache.json
+market_catalog.json
+market_detail_cache.json
+set_cache.json
 *.log
 
 # local launcher profile (regenerated on launch)

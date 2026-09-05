@@ -71,6 +71,12 @@ def _get_json(url: str) -> dict:
     return resp.json()
 
 
+def get_json(url: str) -> dict:
+    """Rate-limited GET returning parsed JSON. All market traffic goes here."""
+    return _get_json(url)
+    return resp.json()
+
+
 def _avg_medians(buckets: list) -> float | None:
     medians = [float(e["median"]) for e in buckets
                if isinstance(e, dict) and e.get("median") is not None]
