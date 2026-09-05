@@ -324,8 +324,8 @@ def api_board_refresh():
 
 
 _sets = {"state": "idle", "step": "", "done": 0, "total": 0,
-         "updated": None, "report": None, "plat": None, "listed": None,
-         "error": None}
+         "updated": None, "report": None, "plat": None, "ducats": None,
+         "listed": None, "error": None}
 
 
 def _sets_run() -> None:
@@ -336,6 +336,7 @@ def _sets_run() -> None:
                       "step": "reading AlecaFrame dump"})
         live = advisor.owned_from_dump()
         _sets["plat"] = live["plat"]
+        _sets["ducats"] = live.get("ducats")
         _sets["step"] = "resolving set membership for new parts"
         with _price_lock:
             advisor.ensure_details(
@@ -406,6 +407,12 @@ def api_sets_start():
 @app.get("/api/sets/status")
 def api_sets_status():
     return jsonify({k: v for k, v in _sets.items()})
+
+
+@app.get("/api/baro")
+def api_baro():
+    import baro
+    return jsonify(baro.fetch())
 
 
 @app.post("/api/snapshots/save")

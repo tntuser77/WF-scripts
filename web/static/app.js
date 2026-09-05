@@ -23,6 +23,7 @@ async function loadSets() {
 async function pollSets() {
   const r = await fetch("/api/sets/status");
   const d = await r.json();
+  if (d.ducats != null) window._ducats = d.ducats;
   const prog = document.getElementById("setsProg");
   const wrap = document.getElementById("setsProgWrap");
   const pct = d.total ? Math.round(100 * d.done / d.total) : 0;
@@ -82,6 +83,28 @@ function renderSets(rep, listed) {
     (near || "<tr><td colspan='7' class='muted'>None.</td></tr>") + "</tbody></table>" +
     "<h3>Complete, ready to list (" + (rep.complete || []).length + ")</h3><table><tbody>" +
     (comp || "<tr><td class='muted'>None.</td></tr>") + "</tbody></table>";
+  const fod = (rep.fodder || []).slice(0, 15).map(x =>
+    "<tr><td>" + x.part + "</td><td>x" + x.count + "</td><td>" + x.p48 +
+    "p</td><td>" + x.ducats_each + "</td><td>" + x.ducats + "</td></tr>").join("");
+  document.getElementById("fodderOut").innerHTML =
+    "<h3>Ducat fodder (sub 25p parts, " + (rep.fodder_ducats || 0) +
+    " ducats total)</h3><table><thead><tr><th>Part</th><th>Count</th><th>48h</th><th>Ducats each</th><th>Ducats</th></tr></thead><tbody>" +
+    (fod || "<tr><td colspan='5' class='muted'>None.</td></tr>") + "</tbody></table>";
+}
+async function loadBaro() {
+  const r = await fetch("/api/baro");
+  const d = await r.json();
+  const box = document.getElementById("baroBox");
+  if (!d.primed || !d.primed.length) {
+    box.textContent = "Trader feed unavailable right now.";
+    return;
+  }
+  const when = d.active ? "here until " + (d.expiry || "?") + " at " + (d.location || "?")
+    : "back after " + (d.activation || "?");
+  const have = window._ducats != null ? "You hold " + window._ducats + " ducats. " : "";
+  box.innerHTML = have + "Baro is " + when + ". Primed mods:<br>" +
+    d.primed.map(p => p.item + " " + p.ducats + "d").join(", ") +
+    (d.stale ? "<br><span>Feed is stale.</span>" : "");
 }
 async function saveSnap() {
   document.getElementById("snapOut").textContent = "Saving...";
@@ -217,3 +240,4 @@ setInterval(async () => {
 }, 3000);
 invStatus();
 tileRefresh();
+loadBaro();

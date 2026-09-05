@@ -25,7 +25,7 @@ def save(name: str | None = None) -> dict:
     live = advisor.owned_from_dump()
     snap = {"name": name or time.strftime("%Y-%m-%d %H:%M"),
             "taken": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "plat": live["plat"],
+            "plat": live["plat"], "ducats": live.get("ducats"),
             "parts": live["parts"],
             "relics": {k: v.get("total", 0) for k, v in live["relics"].items()}}
     path = SNAP_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}.json"
@@ -92,11 +92,16 @@ def diff(a: dict, b: dict) -> dict:
     plat_delta = None
     if isinstance(a.get("plat"), (int, float)) and isinstance(b.get("plat"), (int, float)):
         plat_delta = b["plat"] - a["plat"]
+    ducat_delta = None
+    if isinstance(a.get("ducats"), (int, float)) and isinstance(b.get("ducats"), (int, float)):
+        ducat_delta = b["ducats"] - a["ducats"]
     parts_in.sort(key=lambda x: x["value"], reverse=True)
     parts_out.sort(key=lambda x: x["value"], reverse=True)
     relics_out.sort(key=lambda x: x["n"], reverse=True)
     return {"plat_from": a.get("plat"), "plat_to": b.get("plat"),
-            "plat_delta": plat_delta, "parts_in": parts_in[:30],
+            "plat_delta": plat_delta, "ducats_from": a.get("ducats"),
+            "ducats_to": b.get("ducats"), "ducat_delta": ducat_delta,
+            "parts_in": parts_in[:30],
             "parts_out": parts_out[:30], "relics_out": relics_out[:30],
             "relics_in": relics_in[:30], "cracked_value": cracked_value,
             "sold_est": sold_est, "relic_cost": round(relic_cost, 1)}

@@ -326,6 +326,23 @@ def build_report(owned_parts: dict | None = None,
     sell_rank.sort(key=lambda r: r["value"], reverse=True)
     hidden = sum(1 for g in groups.values() for p in g["parts"]
                  if g["owned"].get(p, 0) > 0 and p in listed)
+    # Ducat fodder: sub trade floor parts ranked by total ducats. These
+    # never earn a trade slot, they fund Baro instead.
+    fodder = []
+    seen = set()
+    for g in groups.values():
+        for p in g["parts"]:
+            if p in seen or p in listed:
+                continue
+            seen.add(p)
+            n = g["owned"].get(p, 0)
+            dq = prices.get(p, {}).get("ducats") or 0
+            if n > 0 and dq > 0 and p48(p) < MIN_TRADE_PLAT:
+                fodder.append({"part": p, "count": n, "p48": p48(p),
+                               "ducats_each": dq, "ducats": dq * n,
+                               "plat_foregone": round(p48(p) * n, 1)})
+    fodder.sort(key=lambda r: r["ducats"], reverse=True)
     return {"near": near, "complete": complete, "dust": dust,
             "sell_rank": sell_rank[:50], "hidden_listed": hidden,
-            "listed_count": len(listed)}
+            "listed_count": len(listed), "fodder": fodder[:30],
+            "fodder_ducats": sum(f["ducats"] for f in fodder)}
