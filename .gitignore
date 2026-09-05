@@ -11,6 +11,8 @@ snapshots/
 my_listings_cache.json
 baro_cache.json
 *.log
+# local sqlite inventory (regenerated from AlecaFrame dump + pricing)
+relics.db
 
 # local launcher profile (regenerated on launch)
 # NOTE: lives under %LOCALAPPDATA%, not the repo, listed here just in case
