@@ -109,6 +109,9 @@ function renderFlips(rep) {
   const head = "<div class='muted'>" +
     ((rep.active ? "Baro is here until " + (rep.expiry || "?") + ". " : "Baro is away. Showing last stock. ") +
     (rep.ducats_balance != null ? "You hold " + rep.ducats_balance + " ducats. " : "") +
+    (rep.unspent_ducats != null && rep.ducats_balance != null
+      ? "Plan spends " + (rep.ducats_balance - rep.unspent_ducats) + ", holds " +
+        rep.unspent_ducats + " for next visit. " : "") +
     "Targets are unranked copies.</div>");
   const body = (rep.rows || []).map((x, i) => {
     if (x.skip) return "<tr><td>" + x.item + "</td><td colspan='6' class='muted'>" + x.reason + "</td></tr>";
