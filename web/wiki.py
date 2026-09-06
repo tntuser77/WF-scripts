@@ -1,6 +1,7 @@
-"""Wiki reward table source. Prefers live fetch, falls back to input.html."""
+"""Wiki reward table source. Bundled file first, live refresh behind."""
 
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -45,21 +46,47 @@ def _parse_soup_table(html: str) -> list:
     return rows
 
 
+def _fetch_live_rows() -> list:
+    resp = requests.get(WIKI_URL, headers={"User-Agent": "Mozilla/5.0 (wfm-local-ui)"}, timeout=8)
+    resp.raise_for_status()
+    return _parse_soup_table(resp.text)
+
+
+def _background_refresh() -> None:
+    """Refresh the cache from the live wiki without stalling a scan pass."""
+    global _state, _cached_rows
+    try:
+        rows = _fetch_live_rows()
+    except Exception:
+        return
+    _cached_rows = rows
+    _state = {"last_fetch": time.strftime("%Y-%m-%d %H:%M"), "rows": len(rows), "source": "live wiki"}
+
+
 def load_rows(refresh: bool = False) -> tuple:
-    """Returns (rows, source). Tries live wiki unless cached this run."""
+    """Returns (rows, source). The bundled input.html answers instantly so
+    Start never waits on the network; the live wiki refreshes in the
+    background and later passes pick it up."""
     global _state, _cached_rows
     if _state["rows"] and not refresh:
         return _cached_rows, _state["source"]
+    if INPUT_HTML.exists():
+        try:
+            rows = _parse_soup_table(INPUT_HTML.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            rows = []
+        if rows:
+            _cached_rows = rows
+            _state = {"last_fetch": time.strftime("%Y-%m-%d %H:%M"),
+                      "rows": len(rows), "source": "input.html"}
+            threading.Thread(target=_background_refresh, daemon=True).start()
+            return rows, _state["source"]
     try:
-        resp = requests.get(WIKI_URL, headers={"User-Agent": "Mozilla/5.0 (wfm-local-ui)"}, timeout=10)
-        resp.raise_for_status()
-        rows = _parse_soup_table(resp.text)
+        rows = _fetch_live_rows()
+        _cached_rows = rows
         _state = {"last_fetch": time.strftime("%Y-%m-%d %H:%M"), "rows": len(rows), "source": "live wiki"}
     except Exception:
-        html = INPUT_HTML.read_text(encoding="utf-8", errors="replace")
-        rows = _parse_soup_table(html)
-        _state = {"last_fetch": time.strftime("%Y-%m-%d %H:%M"), "rows": len(rows), "source": "input.html fallback"}
-    _cached_rows = rows
+        rows = _cached_rows
     return rows, _state["source"]
 
 
