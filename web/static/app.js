@@ -112,16 +112,25 @@ function renderFlips(rep) {
     "Targets are unranked copies.</div>");
   const body = (rep.rows || []).map((x, i) => {
     if (x.skip) return "<tr><td>" + x.item + "</td><td colspan='6' class='muted'>" + x.reason + "</td></tr>";
+    const have = (x.listed || []).map(o => o.qty + "x at " + o.price + "p").join(", ");
     const note = x.ppd + "p per ducat, base " + x.baseline + "p, ceiling " + x.ceiling + "p" +
+      (have ? "<br>Listed: " + have : "") +
       (x.fast_repeater ? ", repeats fast" : "") +
       (x.crashed_now ? ", crashed this week, wait to list" : "") +
       "<br>" + x.reason;
     const defq = x.owned > 0 ? x.owned : x.buy;
-    const ctl = "<input id='flipq" + i + "' type='number' min='1' value='" + defq +
-      "' style='width:64px; font-size:16px; padding:6px; border-radius:8px; background:#111; color:#eee; border:1px solid #555;'>" +
-      " <button id='flipb" + i + "' onclick=\"listPart('flipb" + i + "', '" + x.slug + "', " +
-      x.target + ", parseInt(document.getElementById('flipq" + i + "').value), 0)\">List at " +
-      x.target + "p</button>";
+    let ctl;
+    if (x.listed_at_target) {
+      const n = (x.listed || []).filter(o => o.price === x.target)
+        .map(o => o.qty).reduce((a, b) => a + b, 0);
+      ctl = "<span class='muted'>Listed x" + n + " at " + x.target + "p</span>";
+    } else {
+      ctl = "<input id='flipq" + i + "' type='number' min='1' value='" + defq +
+        "' style='width:64px; font-size:16px; padding:6px; border-radius:8px; background:#111; color:#eee; border:1px solid #555;'>" +
+        " <button id='flipb" + i + "' onclick=\"listPart('flipb" + i + "', '" + x.slug + "', " +
+        x.target + ", parseInt(document.getElementById('flipq" + i + "').value), 0)\">List at " +
+        x.target + "p</button>";
+    }
     return "<tr><td>" + x.item + "</td><td>x" + x.owned + "</td><td>" + x.ducats + "d</td><td>" + x.target +
       "p</td><td>x" + x.buy + "</td><td>" + ctl + "</td><td class='muted'>" + note + "</td></tr>";
   }).join("");

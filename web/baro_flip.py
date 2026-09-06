@@ -165,6 +165,11 @@ def compute(hours_per_week: float = 9.0) -> dict:
     except Exception:
         balance = None
         owned = {}
+    try:
+        import listings
+        mine = listings.my_sell_orders()
+    except Exception:
+        mine = {}
     rows = []
     for m in mods:
         try:
@@ -201,6 +206,10 @@ def compute(hours_per_week: float = 9.0) -> dict:
     for row in rows:
         if row.get("skip"):
             continue
+        listed = mine.get(row["slug"], [])
+        row["listed"] = listed
+        row["listed_at_target"] = any(
+            o.get("price") == row["target"] for o in listed)
         row["credit_total"] = (row["credits"] or 0) * row["buy"]
         row["expect_plat"] = round(row["target"] * row["buy"], 1)
     rows.sort(key=lambda r: r.get("expect_plat", 0), reverse=True)

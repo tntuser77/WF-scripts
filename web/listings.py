@@ -20,6 +20,7 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent.parent
 ENV_FILE = BASE / "web" / ".env"
 CACHE_FILE = BASE / "my_listings_cache.json"
+DETAIL_CACHE_FILE = BASE / "my_orders_cache.json"
 TTL_SECONDS = 15 * 60
 
 
@@ -120,6 +121,71 @@ def fetch_listed(user: str | None = None) -> dict:
             "mode": "none"}
 
 
+def my_sell_orders() -> dict:
+    """{slug: [{price, qty, rank}]} for own visible sell orders. Token
+    first, public profile fallback. 15 minute disk cache. Never raises."""
+    import market_client
+
+    user = username()
+    tok = token()
+    if DETAIL_CACHE_FILE.exists():
+        try:
+            cached = json.loads(DETAIL_CACHE_FILE.read_text(encoding="utf-8"))
+            if cached.get("name") == user and \
+                    time.time() - cached.get("at", 0) < TTL_SECONDS:
+                return cached.get("orders", {})
+        except Exception:
+            pass
+    orders: dict = {}
+
+    def add(slug, price, qty, rank):
+        if slug:
+            orders.setdefault(slug, []).append(
+                {"price": price, "qty": qty, "rank": rank})
+
+    if tok:
+        try:
+            data = market_client.get_json_auth(
+                "https://api.warframe.market/v2/orders/my", tok)
+            for o in data.get("data", []):
+                if not isinstance(o, dict) or o.get("type") != "sell":
+                    continue
+                item = o.get("item") or {}
+                slug = item.get("slug") or ""
+                if not slug and o.get("itemId"):
+                    try:
+                        import market_items
+                        slug = market_items.index()["by_id"].get(
+                            o["itemId"], {}).get("slug", "")
+                    except Exception:
+                        pass
+                add(slug, o.get("platinum"), o.get("quantity"),
+                    o.get("rank"))
+            DETAIL_CACHE_FILE.write_text(json.dumps(
+                {"name": user, "at": time.time(), "orders": orders}),
+                encoding="utf-8")
+            return orders
+        except Exception:
+            pass
+    if user:
+        try:
+            data = market_client.get_json(
+                f"https://api.warframe.market/v1/profile/{user}/orders")
+            for o in (data.get("payload", {}).get("sell_orders", []) or []):
+                if not isinstance(o, dict):
+                    continue
+                add((o.get("item") or {}).get("url_name", ""),
+                    o.get("platinum"), o.get("quantity"),
+                    (o.get("item") or {}).get("mod_rank"))
+            DETAIL_CACHE_FILE.write_text(json.dumps(
+                {"name": user, "at": time.time(), "orders": orders}),
+                encoding="utf-8")
+            return orders
+        except Exception:
+            pass
+    return orders
+
+
 def create_sell_order(slug: str, price: int, quantity: int,
                       rank: int | None = None) -> dict:
     """List owned stock at a fixed unit price. Rankable items (mods) need
@@ -154,6 +220,8 @@ def create_sell_order(slug: str, price: int, quantity: int,
             "https://api.warframe.market/v2/order", tok, body)
         if CACHE_FILE.exists():
             CACHE_FILE.unlink()
+        if DETAIL_CACHE_FILE.exists():
+            DETAIL_CACHE_FILE.unlink()
         order = (data.get("data") or {})
         return {"ok": True, "order_id": order.get("id")}
     except Exception as e:
