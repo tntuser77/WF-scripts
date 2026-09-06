@@ -114,10 +114,7 @@ function renderFlips(rep) {
     if (x.skip) return "<tr><td>" + x.item + "</td><td colspan='6' class='muted'>" + x.reason + "</td></tr>";
     const have = (!x.listed_at_target ? (x.listed || []) : [])
       .map(o => o.qty + "x at " + o.price + "p").join(", ");
-    const status = x.crashed_now ? "crashed"
-      : x.qty < 1 ? "too slow, skip"
-      : x.fast_repeater ? "repeats fast" : "ready";
-    const note = x.ppd + "p per ducat, " + status +
+    const note = (x.qty < 1 ? "too slow, skip" : x.limited_by + " limited") +
       (have ? "<br>Listed: " + have : "");
     const defq = x.owned > 0 ? x.owned : x.buy;
     let ctl;
