@@ -73,14 +73,16 @@ function renderSets(rep, listed) {
     "<h3>Best to sell, most valuable first (highlighted = keep one back, set pays more)</h3><table><thead><tr><th>Item</th><th>Kind</th><th>List qty</th><th>Each</th><th>Value</th><th>Note</th><th></th></tr></thead><tbody>" +
     (acts || "<tr><td colspan='7' class='muted'>None.</td></tr>") + "</tbody></table>";
 }
-async function listPart(bid, part, price, count) {
+async function listPart(bid, part, price, count, rank) {
   if (!confirm("List " + count + "x " + part + " at " + price + "p each?")) return;
   const btn = document.getElementById(bid);
   btn.disabled = true;
   btn.textContent = "Listing...";
+  const payload = {slug: part, price: price, quantity: count};
+  if (rank !== undefined) payload.rank = rank;
   const r = await fetch("/api/orders/sell", {method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({slug: part, price: price, quantity: count})});
+    body: JSON.stringify(payload)});
   const d = await r.json();
   btn.textContent = d.ok ? "Listed" : "Failed";
   if (!d.ok) { btn.disabled = false; alert("Order failed: " + d.error); }
@@ -118,7 +120,7 @@ function renderFlips(rep) {
     const ctl = "<input id='flipq" + i + "' type='number' min='1' value='" + defq +
       "' style='width:64px; font-size:16px; padding:6px; border-radius:8px; background:#111; color:#eee; border:1px solid #555;'>" +
       " <button id='flipb" + i + "' onclick=\"listPart('flipb" + i + "', '" + x.slug + "', " +
-      x.target + ", parseInt(document.getElementById('flipq" + i + "').value))\">List at " +
+      x.target + ", parseInt(document.getElementById('flipq" + i + "').value), 0)\">List at " +
       x.target + "p</button>";
     return "<tr><td>" + x.item + "</td><td>x" + x.owned + "</td><td>" + x.ducats + "d</td><td>" + x.target +
       "p</td><td>x" + x.buy + "</td><td>" + ctl + "</td><td class='muted'>" + note + "</td></tr>";

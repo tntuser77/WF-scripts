@@ -120,8 +120,10 @@ def fetch_listed(user: str | None = None) -> dict:
             "mode": "none"}
 
 
-def create_sell_order(slug: str, price: int, quantity: int) -> dict:
-    """List owned stock at a fixed unit price. Returns {ok, order_id/error}.
+def create_sell_order(slug: str, price: int, quantity: int,
+                      rank: int | None = None) -> dict:
+    """List owned stock at a fixed unit price. Rankable items (mods) need
+    their rank, unranked copies list at 0. Returns {ok, order_id/error}.
 
     Visible immediately. Callers confirm with the user first, this does
     not second guess them.
@@ -142,6 +144,12 @@ def create_sell_order(slug: str, price: int, quantity: int) -> dict:
                 "quantity": int(quantity), "visible": True}
         if entry.get("bulkTradable"):
             body["perTrade"] = 1
+        if rank is not None:
+            top = entry.get("maxRank")
+            if top is not None and not (0 <= int(rank) <= int(top)):
+                return {"ok": False,
+                        "error": f"rank {rank} outside 0-{top} for {slug}"}
+            body["rank"] = int(rank)
         data = market_client.post_json_auth(
             "https://api.warframe.market/v2/order", tok, body)
         if CACHE_FILE.exists():
@@ -152,4 +160,9 @@ def create_sell_order(slug: str, price: int, quantity: int) -> dict:
         msg = str(e)
         if "401" in msg or "403" in msg:
             return {"ok": False, "error": "token expired, paste a fresh JWT"}
-        return {"ok": False, "error": msg[:160]}
+        detail = ""
+        try:
+            detail = (e.response.text or "")[:160]
+        except Exception:
+            pass
+        return {"ok": False, "error": (msg[:120] + " " + detail).strip()}

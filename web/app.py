@@ -459,9 +459,11 @@ def api_baro_flips_status():
 def api_order_sell():
     import listings
     body = request.get_json(silent=True) or {}
+    rank = body.get("rank")
     out = listings.create_sell_order(
         str(body.get("slug", "")), int(body.get("price", 0) or 0),
-        int(body.get("quantity", 0) or 0))
+        int(body.get("quantity", 0) or 0),
+        int(rank) if rank is not None else None)
     return jsonify(out)
 
 
