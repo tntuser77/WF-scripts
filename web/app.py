@@ -280,6 +280,7 @@ def api_search():
 
 @app.get("/api/board")
 def api_board():
+    _touch_ui()
     try:
         min_part = float(request.args.get("min_part", 40))
     except (TypeError, ValueError):
@@ -656,16 +657,45 @@ def api_tile_stop():
 
 _server = None
 
+# Last time any open page checked in. The launcher starts the server with
+# --exit-when-idle so closing the window is a full quit: no check-ins for
+# a while means no UI left, and the server stops itself (scanner and tile
+# scanner included). A manually started server has no timeout and runs
+# until the Quit button or Ctrl+C.
+_last_ui = {"at": time.time()}
+
+
+def _touch_ui() -> None:
+    _last_ui["at"] = time.time()
+
+
+def _stop_everything() -> None:
+    _board["running"] = False
+    global _tile_proc
+    try:
+        if _tile_proc is not None and _tile_proc.poll() is None:
+            _tile_proc.terminate()
+    except Exception:
+        pass
+
+
+def _idle_watchdog(timeout_s: int) -> None:
+    while True:
+        time.sleep(5)
+        if time.time() - _last_ui["at"] < timeout_s:
+            continue
+        _stop_everything()
+        if _server is not None:
+            _server.shutdown()
+        return
+
 
 @app.post("/api/quit")
 def api_quit():
     """Stop everything: board loop, tile scanner, then the server itself."""
     def stop():
         time.sleep(0.5)
-        _board["running"] = False
-        global _tile_proc
-        if _tile_proc is not None and _tile_proc.poll() is None:
-            _tile_proc.terminate()
+        _stop_everything()
         if _server is not None:
             _server.shutdown()
     threading.Thread(target=stop, daemon=True).start()
@@ -680,6 +710,14 @@ if __name__ == "__main__":
     except OSError:
         sys.exit(0)  # another copy already serves this port
     probe.close()
+    idle_timeout = 0
+    if "--exit-when-idle" in sys.argv:
+        try:
+            idle_timeout = int(sys.argv[sys.argv.index("--exit-when-idle") + 1])
+        except (ValueError, IndexError):
+            idle_timeout = 0
     from werkzeug.serving import make_server
     _server = make_server("127.0.0.1", 5000, app)
+    if idle_timeout > 0:
+        threading.Thread(target=_idle_watchdog, args=(idle_timeout,), daemon=True).start()
     _server.serve_forever()

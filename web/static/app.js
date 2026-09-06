@@ -134,8 +134,17 @@ const BOARD_WORK = ["loading reward table", "pricing gold parts", "checking sell
 async function loadBoard() {
   const mp = document.getElementById("minPart").value;
   const mf = document.getElementById("minProfit").value;
-  const r = await fetch("/api/board?min_part=" + mp + "&min_profit=" + mf);
-  const d = await r.json();
+  let d;
+  try {
+    const r = await fetch("/api/board?min_part=" + mp + "&min_profit=" + mf);
+    d = await r.json();
+  } catch (e) {
+    document.getElementById("boardMeta").textContent =
+      "Server stopped. Relaunch Relic Tools from the Start Menu.";
+    document.getElementById("boardProg").style.display = "none";
+    document.getElementById("boardBtn").textContent = "Start";
+    return;
+  }
   const c = d.cycle || {done: 0, total: 0, round: 0, phase: "idle", step: 0, steps: 2, current: "", qualified: 0};
   const pct = c.total ? Math.round(100 * c.done / c.total) : 0;
   const deals = d.fallback ? d.rows.length + " near-misses" : d.shown + " deals";

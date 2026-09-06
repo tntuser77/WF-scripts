@@ -21,7 +21,7 @@ function AppServer() {
 $ownServer = $false
 if (-not (Port-Open $port)) {
   $ownServer = $true
-  Start-Process -FilePath $venvPy -ArgumentList "`"$app`""
+  Start-Process -FilePath $venvPy -ArgumentList "`"$app`" --exit-when-idle 60"
   for ($i = 0; $i -lt 60 -and -not (Port-Open $port); $i++) { Start-Sleep -Seconds 1 }
 }
 
