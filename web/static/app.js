@@ -113,11 +113,11 @@ function renderFlips(rep) {
   const body = (rep.rows || []).map((x, i) => {
     if (x.skip) return "<tr><td>" + x.item + "</td><td colspan='6' class='muted'>" + x.reason + "</td></tr>";
     const have = (x.listed || []).map(o => o.qty + "x at " + o.price + "p").join(", ");
-    const note = x.ppd + "p per ducat, base " + x.baseline + "p, ceiling " + x.ceiling + "p" +
-      (have ? "<br>Listed: " + have : "") +
-      (x.fast_repeater ? ", repeats fast" : "") +
-      (x.crashed_now ? ", crashed this week, wait to list" : "") +
-      "<br>" + x.reason;
+    const status = x.crashed_now ? "crashed, wait to list"
+      : x.qty < 1 ? "too slow, skip"
+      : x.fast_repeater ? "repeats fast" : "ready";
+    const note = x.ppd + "p per ducat, " + status +
+      (have ? "<br>Listed: " + have : "");
     const defq = x.owned > 0 ? x.owned : x.buy;
     let ctl;
     if (x.listed_at_target) {
