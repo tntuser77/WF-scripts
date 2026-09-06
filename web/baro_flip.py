@@ -18,6 +18,7 @@ CACHE_TTL_HOURS = 6
 
 CAPTURE_SHARE = 0.10
 WINDOW_WEEKS = 8
+EXIT_WEEKS = 4
 REPEAT_HALVE = 0.5
 UNDERCUT = 2
 MIN_TARGET = 25
@@ -134,18 +135,19 @@ def analyze(item: str, ducats: int, credits: int) -> dict:
 
 
 def size_qty(row: dict, hours_per_week: float) -> dict:
-    """Gross copies wanted from time alone. Ducat budget gets allocated
-    later, best returns first, so this names no limit yet."""
+    """Gross copies wanted from time alone. Capped to what clears in
+    EXIT_WEEKS so no position outstays half the window. Ducat budget gets
+    allocated later, best returns first, so this names no limit yet."""
     want = int(row["hourly_rate"] * hours_per_week * WINDOW_WEEKS)
+    exit_cap = int(row["hourly_rate"] * hours_per_week * EXIT_WEEKS)
+    want = min(want, exit_cap)
     if row["fast_repeater"]:
         want = int(want * REPEAT_HALVE)
     if want < 1:
         return {"qty": 0,
-                "reason": f"{row['hourly_rate']}/hr x {hours_per_week}h x "
-                          f"{WINDOW_WEEKS}w covers less than 1 copy"}
+                "reason": f"clears less than 1 copy in {EXIT_WEEKS} weeks"}
     return {"qty": want,
-            "reason": f"{row['hourly_rate']}/hr x {hours_per_week}h x "
-                      f"{WINDOW_WEEKS}w" +
+            "reason": f"exits in {EXIT_WEEKS}w at {row['hourly_rate']}/hr" +
                       (" halved, fast repeater" if row["fast_repeater"] else "")}
 
 
