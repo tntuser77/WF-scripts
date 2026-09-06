@@ -186,10 +186,54 @@ def my_sell_orders() -> dict:
     return orders
 
 
+def _consensus_subtype(slug: str) -> str | None:
+    """Most common subtype among live orders, for variant items like the
+    Regular versus Atragraph Target Cracker. None when the market shows
+    no consensus."""
+    import market_client
+    from collections import Counter
+
+    try:
+        data = market_client.get_json(
+            f"https://api.warframe.market/v2/orders/item/{slug}/top")
+        orders = data.get("data", {})
+        votes = Counter(
+            e.get("subtype") for e in (orders.get("sell", []) +
+                                       orders.get("buy", []))
+            if isinstance(e, dict) and e.get("subtype"))
+        return votes.most_common(1)[0][0] if votes else None
+    except Exception:
+        return None
+
+
+def _error_detail(e: Exception) -> str:
+    try:
+        return (e.response.text or "")[:160]
+    except Exception:
+        return ""
+
+
+def _post_order(tok: str, body: dict) -> dict:
+    import market_client
+
+    data = market_client.post_json_auth(
+        "https://api.warframe.market/v2/order", tok, body)
+    if CACHE_FILE.exists():
+        CACHE_FILE.unlink()
+    if DETAIL_CACHE_FILE.exists():
+        DETAIL_CACHE_FILE.unlink()
+    order = (data.get("data") or {})
+    return {"ok": True, "order_id": order.get("id")}
+
+
 def create_sell_order(slug: str, price: int, quantity: int,
-                      rank: int | None = None) -> dict:
+                      rank: int | None = None,
+                      subtype: str | None = None) -> dict:
     """List owned stock at a fixed unit price. Rankable items (mods) need
-    their rank, unranked copies list at 0. Returns {ok, order_id/error}.
+    their rank, unranked copies list at 0. Variant items like the
+    Regular versus Atragraph Target Cracker need their subtype, resolved
+    from live orders when the caller does not name one. Returns
+    {ok, order_id/error}.
 
     Visible immediately. Callers confirm with the user first, this does
     not second guess them.
@@ -216,21 +260,22 @@ def create_sell_order(slug: str, price: int, quantity: int,
                 return {"ok": False,
                         "error": f"rank {rank} outside 0-{top} for {slug}"}
             body["rank"] = int(rank)
-        data = market_client.post_json_auth(
-            "https://api.warframe.market/v2/order", tok, body)
-        if CACHE_FILE.exists():
-            CACHE_FILE.unlink()
-        if DETAIL_CACHE_FILE.exists():
-            DETAIL_CACHE_FILE.unlink()
-        order = (data.get("data") or {})
-        return {"ok": True, "order_id": order.get("id")}
+        if subtype:
+            body["subtype"] = subtype
+        try:
+            return _post_order(tok, body)
+        except Exception as e:
+            detail = _error_detail(e)
+            if "subtype" not in detail or subtype:
+                raise
+            consensus = _consensus_subtype(slug)
+            if not consensus:
+                raise
+            body["subtype"] = consensus
+            return _post_order(tok, body)
     except Exception as e:
         msg = str(e)
         if "401" in msg or "403" in msg:
             return {"ok": False, "error": "token expired, paste a fresh JWT"}
-        detail = ""
-        try:
-            detail = (e.response.text or "")[:160]
-        except Exception:
-            pass
+        detail = _error_detail(e)
         return {"ok": False, "error": (msg[:120] + " " + detail).strip()}

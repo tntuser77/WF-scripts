@@ -229,11 +229,6 @@ async function loadBoard() {
   }
   document.getElementById("alerts").innerHTML = d.alerts.slice().reverse().map(a => "<div>" + a + "</div>").join("");
 }
-async function quitApp() {
-  if (!confirm("Quit Relic Tools? This stops the scanner and the server.")) return;
-  try { await fetch("/api/quit", {method: "POST"}); } catch (e) {}
-  window.close();
-}
 async function tileToggle() {
   const cur = document.getElementById("tileBtn").textContent;
   await fetch("/api/tile/" + (cur === "Start" ? "start" : "stop"), {method: "POST"});

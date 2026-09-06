@@ -6,7 +6,7 @@
 <title>WFM local</title>
 <style>
 body { font-family: Segoe UI, Arial, sans-serif; background: #141417; color: #e8e8e8; margin: 0; font-size: 18px; line-height: 1.5; }
-header { padding: 16px 28px; background: #1e1e24; border-bottom: 1px solid #333; font-size: 20px; }
+header { padding: 12px 28px; background: #1e1e24; border-bottom: 1px solid #333; font-size: 20px; position: sticky; top: 0; z-index: 10; }
 main { max-width: 1400px; margin: 0 auto; padding: 24px; display: grid; gap: 24px; grid-template-columns: 1fr 1fr; }
 section { background: #1e1e24; border: 1px solid #333; border-radius: 10px; padding: 24px 26px; }
 section.wide { grid-column: 1 / -1; }
@@ -29,12 +29,13 @@ a { color: #8ab4ff; }
 </style>
 </head>
 <body>
-<header style="display:flex; align-items:center; gap:12px;"><strong>WFM local</strong> <span class="muted">draft for review, runs on 127.0.0.1 only</span>
+<header style="display:flex; align-items:center; gap:12px;"><strong>WFM local</strong>
+<button onclick="saveSnap()" title="Save a snapshot">Snapshot</button>
+<button onclick="diffSnaps()" title="Diff the last two snapshots">Diff</button>
 <span style="flex:1;"></span>
 <span class="muted" style="font-size:16px;">Tile scanner:</span>
 <button id="tileBtn" onclick="tileToggle()">Start</button>
-<span id="tileState" class="muted" style="font-size:16px;"></span>
-<button onclick="quitApp()" title="Stop everything and close">Quit</button></header>
+<span id="tileState" class="muted" style="font-size:16px;"></span></header>
 <main>
 <section class="wide">
 <h2>Price search</h2>
@@ -112,11 +113,7 @@ a { color: #8ab4ff; }
 </section>
 <section class="wide">
 <h2>Session tracker</h2>
-<div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
-<button onclick="saveSnap()">Save snapshot</button>
-<button onclick="diffSnaps()">Diff last two</button>
-<span class="muted">Save one before you crack, one after. Plat gained is estimated at 48h medians.</span>
-</div>
+<div class="muted">Save one before you crack, one after. Plat gained is estimated at 48h medians.</div>
 <div id="snapOut" class="muted" style="margin-top:10px;">No diff yet.</div>
 </section>
 <section class="wide">
