@@ -130,24 +130,33 @@ async function diffSnaps() {
     "<br>Parts out: " + x.parts_out.map(e => e.part + " x" + e.n + " (" + e.value + "p)").join(", ") +
     "<br><span>Relic cost is opportunity cost. Bought and farmed relics look the same in the dump.</span>";
 }
+const BOARD_WORK = ["loading reward table", "pricing gold parts", "checking sell orders"];
 async function loadBoard() {
   const mp = document.getElementById("minPart").value;
   const mf = document.getElementById("minProfit").value;
   const r = await fetch("/api/board?min_part=" + mp + "&min_profit=" + mf);
   const d = await r.json();
-  const c = d.cycle || {done: 0, total: 0, round: 0, phase: "idle", current: "", qualified: 0};
+  const c = d.cycle || {done: 0, total: 0, round: 0, phase: "idle", step: 0, steps: 2, current: "", qualified: 0};
   const pct = c.total ? Math.round(100 * c.done / c.total) : 0;
+  const deals = d.fallback ? d.rows.length + " near-misses" : d.shown + " deals";
+  let state;
+  if (!d.running) state = "Stopped. ";
+  else if (c.phase === "resting between passes") state = "Resting between passes. ";
+  else state = "Scanning, pass " + c.round + ". ";
   document.getElementById("boardMeta").textContent =
-    (d.running ? "Scanning. pass " + c.round + " (" + c.done + "/" + c.total + " relics, " +
-      c.qualified + " qualify). " : "Stopped. ") +
-    "Showing " + d.shown + " of " + d.tracked + " tracked. " +
-    "Updated: " + (d.updated || "never") + " / order feed: " + d.ws +
-    " / market calls: " + d.market.total;
+    state + deals + ". Updated " + (d.updated || "never") + ".";
+  const working = d.running && BOARD_WORK.includes(c.phase);
   const prog = document.getElementById("boardProg");
-  prog.style.display = d.running ? "block" : "none";
-  document.getElementById("boardBar").style.width = pct + "%";
-  document.getElementById("boardCurrent").textContent =
-    c.phase + (c.current ? ": " + c.current : "") + (c.total ? " (" + pct + "%)" : "");
+  prog.style.display = working ? "block" : "none";
+  if (working) {
+    document.getElementById("boardBar").style.width = pct + "%";
+    document.getElementById("boardCurrent").textContent =
+      "Step " + (c.step || 1) + " of " + (c.steps || 2) + ": " + c.phase +
+      (c.current ? ", " + c.current : "") + " (" + pct + "%)";
+  }
+  document.getElementById("boardDebug").textContent =
+    "Order feed: " + d.ws + " / market calls: " + d.market.total +
+    " / pass progress: " + c.done + "/" + c.total + " (" + c.qualified + " qualify)";
   document.getElementById("boardLog").innerHTML =
     (d.activity || []).slice().reverse().map(a => "<div>" + a + "</div>").join("");
   const tb = document.getElementById("boardRows");

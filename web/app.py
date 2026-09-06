@@ -26,6 +26,7 @@ MIN_QTY = 6
 _board = {"updated": None, "rows": [], "alerts": [], "running": False,
           "ws": "off", "activity": [],
           "cycle": {"done": 0, "total": 0, "round": 0, "phase": "idle",
+                    "step": 0, "steps": 2,
                     "current": "", "qualified": 0, "started": None}}
 _tile_proc = None
 _tile_last = {"status": "stopped"}
@@ -102,10 +103,15 @@ def build_watchlist() -> dict:
         gold[slug]["relics"].add(r["relic"])
     watch: dict = {}
     names = list(gold.keys())
+    c["step"] = 1
+    c["steps"] = 2
     c["phase"] = "pricing gold parts"
+    c["done"] = 0
+    c["total"] = len(names)
     for i, slug in enumerate(names, 1):
         if not _wait_slot():
             return {}
+        c["done"] = i
         c["current"] = f"{gold[slug]['label']} ({i}/{len(names)})"
         try:
             s = market_client.part_statistics(slug)
@@ -150,7 +156,8 @@ def board_refresh_once() -> None:
     watch = build_watchlist()
     names = sorted(watch.keys())
     _board["cycle"] = {"done": 0, "total": len(names), "round": _board["cycle"]["round"] + 1,
-                       "phase": "checking sell orders", "current": "",
+                       "phase": "checking sell orders", "step": 2, "steps": 2,
+                       "current": "",
                        "qualified": 0, "started": time.strftime("%H:%M:%S")}
     for i, relic in enumerate(names, 1):
         if not _board["running"]:
@@ -305,6 +312,7 @@ def api_board_start():
         _board["running"] = True
         _board["activity"] = []
         _board["cycle"] = {"done": 0, "total": 0, "round": 0, "phase": "starting",
+                           "step": 0, "steps": 2,
                            "current": "", "qualified": 0, "started": time.strftime("%H:%M:%S")}
         _note("scanner started")
         threading.Thread(target=board_loop, daemon=True).start()
