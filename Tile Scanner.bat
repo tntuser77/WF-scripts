@@ -1,3 +1,3 @@
 @echo off
-C:\Users\Elijah\Documents\wfm\.venv\Scripts\python.exe C:\Users\Elijah\Documents\wfm\scripts\tilescanner\main.py
+"%~dp0.venv\Scripts\python.exe" "%~dp0scripts\tilescanner\main.py"
 pause

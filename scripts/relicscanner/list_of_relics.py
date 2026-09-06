@@ -1,11 +1,12 @@
 import json
+import os
 import re
 import requests
 from decrypt import process_data
 
 LocalDump = 'lastData Dump.json'
 relicInfo = "https://raw.githubusercontent.com/WFCD/warframe-items/refs/heads/master/data/json/Relics.json"
-file_path = r"C:\Users\Elijah\AppData\Local\AlecaFrame\lastData.dat"
+file_path = os.path.join(os.environ["LOCALAPPDATA"], "AlecaFrame", "lastData.dat")
 
 
 data = json.loads(process_data(file_path))

@@ -28,13 +28,17 @@ def main_sync():
         input()
         return
 
-    # 1. Start the keypress listener thread (to stop the whole program)
-    listener_thread = threading.Thread(
-        target=keypress_listener,
-        args=(STOP_FLAG,),
-        daemon=True
-    )
-    listener_thread.start()
+    # 1. Start the keypress listener thread (to stop the whole program).
+    # Only when attached to a terminal; under the web UI there is no
+    # stdin, and stopping happens via /api/tile/stop instead.
+    listener_thread = None
+    if sys.stdin.isatty():
+        listener_thread = threading.Thread(
+            target=keypress_listener,
+            args=(STOP_FLAG,),
+            daemon=True
+        )
+        listener_thread.start()
 
     # 2. Start the GUI overlay thread
     overlay_thread = threading.Thread(
@@ -52,13 +56,11 @@ def main_sync():
         print(f"An unexpected error occurred in the main loop: {e}")
     finally:
         STOP_FLAG.set()
-        listener_thread.join(timeout=1)
+        if listener_thread is not None:
+            listener_thread.join(timeout=1)
         overlay_thread.join(timeout=1)
         print("✅ Program ended.")
 
 
 if __name__ == "__main__":
-    if sys.stdin.isatty():
-        main_sync()
-    else:
-        print("Error: Script requires an interactive terminal for keypress detection.")
+    main_sync()

@@ -270,6 +270,11 @@ def index():
     return render_template("index.html")
 
 
+@app.get("/favicon.ico")
+def favicon():
+    return app.send_static_file("favicon.ico")
+
+
 @app.get("/api/search")
 def api_search():
     q = request.args.get("q", "").strip()
@@ -673,8 +678,8 @@ def api_tile_start():
     global _tile_proc
     if _tile_proc is not None and _tile_proc.poll() is None:
         return jsonify({"running": True})
-    script = str(BASE / "Tile Scanner")
-    _tile_proc = subprocess.Popen([sys.executable, script])
+    script = BASE / "scripts" / "tilescanner" / "main.py"
+    _tile_proc = subprocess.Popen([sys.executable, str(script)], cwd=str(script.parent))
     _tile_last["status"] = f"started pid {_tile_proc.pid}"
     return jsonify({"running": True, "pid": _tile_proc.pid})
 
@@ -700,6 +705,14 @@ _last_ui = {"at": time.time()}
 
 def _touch_ui() -> None:
     _last_ui["at"] = time.time()
+
+
+def _log(msg: str) -> None:
+    try:
+        with open(BASE / "server.log", "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}\n")
+    except Exception:
+        pass
 
 
 def _stop_everything() -> None:
@@ -750,7 +763,7 @@ if __name__ == "__main__":
         except (ValueError, IndexError):
             idle_timeout = 0
     from werkzeug.serving import make_server
-    _server = make_server("127.0.0.1", 5000, app)
+    _server = make_server("127.0.0.1", 5000, app, threaded=True)
     if idle_timeout > 0:
         threading.Thread(target=_idle_watchdog, args=(idle_timeout,), daemon=True).start()
     _server.serve_forever()

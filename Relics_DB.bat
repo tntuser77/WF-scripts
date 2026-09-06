@@ -1,3 +1,3 @@
 @echo off
-C:\Users\Elijah\Documents\wfm\.venv\Scripts\python.exe C:\Users\Elijah\Documents\wfm\scripts\relicscanner\relic_db.py
+"%~dp0.venv\Scripts\python.exe" "%~dp0scripts\relicscanner\relic_db.py"
 pause

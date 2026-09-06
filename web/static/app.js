@@ -118,7 +118,7 @@ function renderFlips(rep) {
       ? "Plan spends " + (rep.ducats_balance - rep.unspent_ducats) + " of " +
         rep.ducats_balance + " ducats, holds " + rep.unspent_ducats +
         " for next visit. " : "") +
-    "Targets are unranked copies.</div>");
+    "Targets are unranked copies.</div>";
   const body = (rep.rows || []).map((x, i) => {
     if (x.skip) return "<tr><td>" + x.item + "</td><td colspan='6' class='muted'>" + x.reason + "</td></tr>";
     const have = (!x.listed_at_target ? (x.listed || []) : [])
@@ -152,31 +152,33 @@ function utcShort(s) {
     timeZone: "UTC"}) + " UTC";
 }
 async function loadBaro() {
+  const sec = document.getElementById("baroSection");
   const box = document.getElementById("baroBox");
   let d;
   try {
     const r = await fetch("/api/baro");
     d = await r.json();
   } catch (e) {
-    box.textContent = "Server stopped. Relaunch Relic Tools from the Start Menu.";
-    return;
+    return false;
   }
-  if (!d.primed || !d.primed.length) {
-    box.textContent = "Trader feed unavailable right now.";
-    return;
+  if (!d.primed || !d.primed.length || !d.active) {
+    if (sec) sec.style.display = "none";
+    return false;
   }
-  const when = d.active ? "here until " + utcShort(d.expiry) + " at " + (d.location || "?")
-    : "back after " + utcShort(d.activation);
-  box.innerHTML = "Baro is " + when + "." +
+  if (sec) sec.style.display = "";
+  box.innerHTML = "Baro is here until " + utcShort(d.expiry) + " at " + (d.location || "?") + "." +
     (d.stale ? "<br><span>Feed is stale.</span>" : "");
+  return true;
 }
 async function saveSnap() {
+  document.getElementById("snapSection").style.display = "";
   document.getElementById("snapOut").textContent = "Saving...";
   const r = await fetch("/api/snapshots/save", {method: "POST"});
   const d = await r.json();
   document.getElementById("snapOut").textContent = d.ok ? "Saved " + d.file + "." : "Error: " + d.error;
 }
 async function diffSnaps() {
+  document.getElementById("snapSection").style.display = "";
   document.getElementById("snapOut").textContent = "Diffing...";
   const l = await (await fetch("/api/snapshots/list")).json();
   const s = l.snaps || [];
@@ -317,5 +319,4 @@ setInterval(async () => {
 }, 3000);
 invStatus();
 tileRefresh();
-loadBaro();
-loadFlips();
+loadBaro().then((here) => { if (here) loadFlips(); });

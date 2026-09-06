@@ -1,4 +1,5 @@
 import json
+import os
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding
 
@@ -24,4 +25,4 @@ def process_data(file_path):
     return json.dumps(data, indent=2)
 
 if __name__ == "__main__":
-    print(process_data(r"C:\Users\Elijah\AppData\Local\AlecaFrame\lastData.dat"))
+    print(process_data(os.path.join(os.environ["LOCALAPPDATA"], "AlecaFrame", "lastData.dat")))

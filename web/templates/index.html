@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WFM local</title>
+<link rel="icon" href="/static/favicon.ico?v=axi2">
 <style>
 body { font-family: Segoe UI, Arial, sans-serif; background: #141417; color: #e8e8e8; margin: 0; font-size: 18px; line-height: 1.5; }
 header { padding: 12px 28px; background: #1e1e24; border-bottom: 1px solid #333; font-size: 20px; position: sticky; top: 0; z-index: 10; }
@@ -25,10 +26,29 @@ a { color: #8ab4ff; }
 .muted { color: #aaa; font-size: 15px; }
 #searchOut { margin-top: 14px; font-size: 18px; }
 #alerts { font-size: 15px; color: #c9c9c9; }
+#jsError { display: none; background: #7a1f1f; color: #fff; padding: 12px 28px; font-size: 17px; border-bottom: 2px solid #d66; }
 @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
 </style>
+<script>
+function showJsError(msg) {
+  var el = document.getElementById("jsError");
+  if (!el) return;
+  el.style.display = "block";
+  el.textContent = msg;
+}
+window.addEventListener("error", function (e) {
+  var detail = e.message || "script error";
+  if (e.filename) detail += " (" + e.filename + (e.lineno ? ":" + e.lineno : "") + ")";
+  showJsError("Page script broke: " + detail + ". The server will shut down soon because the page stopped checking in. Press F12 for details.");
+});
+window.addEventListener("unhandledrejection", function (e) {
+  var reason = (e.reason && e.reason.message) || String(e.reason || "unknown");
+  showJsError("Page script broke: " + reason + ". The server will shut down soon because the page stopped checking in. Press F12 for details.");
+});
+</script>
 </head>
 <body>
+<div id="jsError" role="alert"></div>
 <header style="display:flex; align-items:center; gap:12px;"><strong>WFM local</strong>
 <button onclick="saveSnap()" title="Save a snapshot">Snapshot</button>
 <button onclick="diffSnaps()" title="Diff the last two snapshots">Diff</button>
@@ -111,12 +131,12 @@ a { color: #8ab4ff; }
 </div>
 <div id="setsOut" style="margin-top:10px;"></div>
 </section>
-<section class="wide">
+<section class="wide" id="snapSection" style="display:none;">
 <h2>Session tracker</h2>
 <div class="muted">Save one before you crack, one after. Plat gained is estimated at 48h medians.</div>
 <div id="snapOut" class="muted" style="margin-top:10px;">No diff yet.</div>
 </section>
-<section class="wide">
+<section class="wide" id="baroSection" style="display:none;">
 <h2>Ducats and Baro</h2>
 <div class="muted" id="baroBox">Checking the trader...</div>
 <div style="margin-top:10px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
@@ -128,5 +148,10 @@ a { color: #8ab4ff; }
 </section>
 </main>
 <script src="/static/app.js"></script>
+<script>
+if (typeof loadBoard !== "function") {
+  showJsError("Page script failed to load, so the board never starts polling. The server will shut down soon because the page stopped checking in. Press F12 for details.");
+}
+</script>
 </body>
 </html>

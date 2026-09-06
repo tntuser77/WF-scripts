@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="x-ua-compatible" content="ie=10">
+<title>Relic Tools starting</title>
+<HTA:APPLICATION ID="RelicLauncher" APPLICATIONNAME="Relic Tools" CAPTION="no" SHOWINTASKBAR="no" SINGLEINSTANCE="yes" SYSMENU="no" BORDER="none" SCROLL="no" CONTEXTMENU="no" />
+<style>
+body { font-family: "Segoe UI", Arial, sans-serif; background: #141417; color: #e8e8e8; margin: 0; overflow: hidden; }
+.box { text-align: center; padding-top: 66px; font-size: 18px; }
+.spin { width: 40px; height: 40px; margin: 0 auto 16px; border: 4px solid #333; border-top-color: #8ab4ff; border-radius: 50%; animation: sp 0.9s linear infinite; }
+@keyframes sp { to { transform: rotate(360deg); } }
+.muted { color: #aaa; font-size: 14px; margin-top: 8px; }
+</style>
+<script language="VBScript">
+Dim sh, fso, webDir, repoRoot, profileDir, chromeExe, serverExe, serverScript, splashUrl
+Set sh = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
+webDir = HtaDir()
+repoRoot = fso.GetParentFolderName(webDir)
+profileDir = sh.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\WFM-Relic-Tools\ChromeProfile"
+chromeExe = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+If ServerUp() Then
+  sh.Run """" & chromeExe & """ --app=http://127.0.0.1:5000/ --user-data-dir=""" & profileDir & """ --no-first-run --no-default-browser-check", 1, False
+  window.close
+Else
+  serverExe = repoRoot & "\.venv\Scripts\pythonw.exe"
+  serverScript = webDir & "\app.py"
+  splashUrl = "file:///" & Replace(Replace(webDir & "\static\loading.html", "\", "/"), " ", "%20")
+  sh.Run """" & serverExe & """ """ & serverScript & """ --exit-when-idle 900", 0, False
+  sh.Run """" & chromeExe & """ --app=" & splashUrl & " --user-data-dir=""" & profileDir & """ --no-first-run --no-default-browser-check", 1, False
+End If
+
+Function ServerUp()
+  ServerUp = False
+  Dim http, st
+  On Error Resume Next
+  Set http = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+  If Err.Number <> 0 Then Exit Function
+  http.setTimeouts 400, 400, 400, 400
+  Err.Clear
+  http.open "GET", "http://127.0.0.1:5000/", False
+  If Err.Number <> 0 Then Exit Function
+  http.send
+  If Err.Number <> 0 Then Exit Function
+  st = -1
+  Err.Clear
+  st = http.status
+  If Err.Number = 0 And st = 200 Then ServerUp = True
+End Function
+
+Function HtaDir()
+  ' Directory holding this .hta, derived from its own file URL so the
+  ' launcher works from any clone location.
+  Dim href
+  href = document.location.href
+  If Left(href, 8) = "file:///" Then href = Mid(href, 9)
+  href = Replace(UrlDecode(href), "/", "\")
+  HtaDir = fso.GetParentFolderName(href)
+End Function
+
+Function UrlDecode(s)
+  Dim out, i, ch
+  out = ""
+  i = 1
+  Do While i <= Len(s)
+    ch = Mid(s, i, 1)
+    If ch = "%" And i + 2 <= Len(s) Then
+      On Error Resume Next
+      out = out & Chr(CLng("&H" & Mid(s, i + 1, 2)))
+      If Err.Number <> 0 Then out = out & "%" : Err.Clear
+      On Error GoTo 0
+      i = i + 3
+    Else
+      out = out & ch
+      i = i + 1
+    End If
+  Loop
+  UrlDecode = out
+End Function
+</script>
+<script>
+(function () {
+  try {
+    window.resizeTo(420, 280);
+    window.moveTo((screen.width - 420) / 2, (screen.height - 280) / 2);
+  } catch (e) {}
+  var url = "http://127.0.0.1:5000/";
+  var done = false;
+  function closeSoon() {
+    if (done) return;
+    done = true;
+    try { window.close(); } catch (e) {}
+  }
+  function poll() {
+    if (done) return;
+    var x = null;
+    try { x = new XMLHttpRequest(); } catch (e) { setTimeout(poll, 250); return; }
+    try {
+      x.onreadystatechange = function () {
+        if (x.readyState === 4 && x.status === 200) closeSoon();
+      };
+      x.open("GET", url, true);
+      x.send();
+    } catch (e) {}
+    setTimeout(poll, 250);
+  }
+  setTimeout(closeSoon, 20000);
+  poll();
+})();
+</script>
+</head>
+<body>
+<div class="box">
+<div class="spin"></div>
+<div>Starting Relic Tools...</div>
+<div class="muted">Warming up the local server.</div>
+</div>
+</body>
+</html>

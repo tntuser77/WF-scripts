@@ -1,6 +1,8 @@
 $ErrorActionPreference = "SilentlyContinue"
-$venvPy = "C:\Users\Elijah\Documents\wfm\.venv\Scripts\pythonw.exe"
-$app = "C:\Users\Elijah\Documents\wfm\web\app.py"
+$webDir = $PSScriptRoot
+$repoRoot = Split-Path $webDir
+$venvPy = Join-Path $repoRoot ".venv\Scripts\pythonw.exe"
+$app = Join-Path $webDir "app.py"
 $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 $profile = "$env:LOCALAPPDATA\WFM-Relic-Tools\ChromeProfile"
 $port = 5000
@@ -19,13 +21,26 @@ function AppServer() {
 }
 
 $ownServer = $false
-if (-not (Port-Open $port)) {
-  $ownServer = $true
-  Start-Process -FilePath $venvPy -ArgumentList "`"$app`" --exit-when-idle 60"
-  for ($i = 0; $i -lt 60 -and -not (Port-Open $port); $i++) { Start-Sleep -Seconds 1 }
+$serverReady = Port-Open $port
+
+# Start the window first. Chrome's own startup is the slowest part of a
+# cold launch, so get it painting while the server boots in parallel.
+# If the server is already warm, go straight to the app. Otherwise show
+# a local splash page that flips to the app as soon as the server
+# answers, so a cold start never looks dead.
+if ($serverReady) {
+  $startUrl = "http://127.0.0.1:$port/"
+} else {
+  $splashPath = Join-Path (Split-Path $app) "static\loading.html"
+  $startUrl = "file:///" + ($splashPath -replace "\\", "/")
 }
 
-$win = Start-Process -FilePath $chrome -ArgumentList "--app=http://127.0.0.1:$port/", "--user-data-dir=`"$profile`"" -PassThru
+$win = Start-Process -FilePath $chrome -ArgumentList "--app=$startUrl", "--user-data-dir=`"$profile`"", "--no-first-run", "--no-default-browser-check" -PassThru
+
+if (-not $serverReady) {
+  $ownServer = $true
+  Start-Process -FilePath $venvPy -ArgumentList "`"$app`" --exit-when-idle 900"
+}
 
 # Wait until the window closes (X button) or the server goes away (Quit button).
 while (-not $win.HasExited) {

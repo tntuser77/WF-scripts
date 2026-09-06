@@ -32,7 +32,7 @@ STOP_FLAG = threading.Event()
 TileData = {
     87: {"name": "Hall of legends", "value": 3},
     105: {"name": "Brig", "value": 3},
-    119: {"name": "Dogshit", "value": 3},
+    119: {"name": "Agrizone", "value": 3},
     120: {"name": "Serenity", "value": 4},
     142: {"name": "Habitat", "value": 3},
     144: {"name": "Lunaro", "value": 3},

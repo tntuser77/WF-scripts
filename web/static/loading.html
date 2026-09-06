@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Starting Relic Tools...</title>
+<link rel="icon" href="favicon.ico?v=axi2">
+<style>
+body { font-family: Segoe UI, Arial, sans-serif; background: #141417; color: #e8e8e8; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
+.box { text-align: center; font-size: 19px; }
+.spin { width: 42px; height: 42px; margin: 0 auto 18px; border: 4px solid #333; border-top-color: #8ab4ff; border-radius: 50%; animation: sp 0.9s linear infinite; }
+@keyframes sp { to { transform: rotate(360deg); } }
+.muted { color: #aaa; font-size: 15px; margin-top: 10px; }
+a { color: #8ab4ff; }
+</style>
+</head>
+<body>
+<div class="box">
+<div class="spin"></div>
+<div>Starting Relic Tools...</div>
+<div class="muted" id="hint">Warming up the local server.</div>
+</div>
+<script>
+(function () {
+  var url = "http://127.0.0.1:5000/";
+  var tries = 0;
+  function poll() {
+    tries++;
+    fetch(url, {mode: "no-cors", cache: "no-store"}).then(function () {
+      location.replace(url);
+    }).catch(function () {
+      if (tries > 400) {
+        document.getElementById("hint").innerHTML =
+          "Still not up. The server may have failed to start. " +
+          "<a href='" + url + "'>Try opening it directly</a>.";
+        return;
+      }
+      setTimeout(poll, 150);
+    });
+  }
+  poll();
+})();
+</script>
+</body>
+</html>
