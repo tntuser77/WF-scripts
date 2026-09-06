@@ -134,19 +134,24 @@ def analyze(item: str, ducats: int, credits: int) -> dict:
 
 
 def size_qty(row: dict, ducats_balance: float | None, hours_per_week: float) -> dict:
-    """Copies to buy. Time capacity and ducat budget race, the lower wins.
-    Fast repeaters get halved."""
+    """Gross copies wanted. Time capacity and ducat budget race, the lower
+    wins and gets named so the UI can say which bound the row."""
     time_qty = row["hourly_rate"] * hours_per_week * WINDOW_WEEKS
-    ducat_qty = (ducats_balance / max(row.get("_nmods", 1), 1) / row["ducats"]) \
-        if ducats_balance and row["ducats"] else time_qty
+    if ducats_balance and row["ducats"]:
+        ducat_qty = ducats_balance / max(row.get("_nmods", 1), 1) / row["ducats"]
+        limited_by = "ducats" if ducat_qty < time_qty else "time"
+    else:
+        ducat_qty = time_qty
+        limited_by = "time"
     qty = int(min(time_qty, ducat_qty))
     if row["fast_repeater"]:
         qty = int(qty * REPEAT_HALVE)
     if qty < 1:
-        return {"qty": 0, "reason": "time and budget cover less than 1 copy"}
-    return {"qty": qty,
+        return {"qty": 0, "limited_by": limited_by,
+                "reason": "time and budget cover less than 1 copy"}
+    return {"qty": qty, "limited_by": limited_by,
             "reason": f"{row['hourly_rate']}/hr x {hours_per_week}h x "
-                      f"{WINDOW_WEEKS}w" +
+                      f"{WINDOW_WEEKS}w, {limited_by} binds" +
                       (" halved, fast repeater" if row["fast_repeater"] else "")}
 
 
@@ -158,9 +163,12 @@ def compute(hours_per_week: float = 9.0) -> dict:
     mods = visit.get("primed", [])
     try:
         import advisor
-        balance = advisor.owned_from_dump().get("ducats")
+        live = advisor.owned_from_dump()
+        balance = live.get("ducats")
+        owned = live.get("parts", {})
     except Exception:
         balance = None
+        owned = {}
     rows = []
     for m in mods:
         try:
@@ -173,8 +181,10 @@ def compute(hours_per_week: float = 9.0) -> dict:
             continue
         row["_nmods"] = max(len(mods), 1)
         row.update(size_qty(row, balance, hours_per_week))
-        row["credit_total"] = (row["credits"] or 0) * row["qty"]
-        row["expect_plat"] = round(row["target"] * row["qty"], 1)
+        row["owned"] = owned.get(row["slug"], 0)
+        row["buy"] = max(0, row["qty"] - row["owned"])
+        row["credit_total"] = (row["credits"] or 0) * row["buy"]
+        row["expect_plat"] = round(row["target"] * row["buy"], 1)
         rows.append(row)
     rows.sort(key=lambda r: r.get("expect_plat", 0), reverse=True)
     return {"active": visit.get("active"), "expiry": visit.get("expiry"),

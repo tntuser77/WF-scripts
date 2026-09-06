@@ -109,21 +109,23 @@ function renderFlips(rep) {
     (rep.ducats_balance != null ? "You hold " + rep.ducats_balance + " ducats. " : "") +
     "Targets are unranked copies.</div>");
   const body = (rep.rows || []).map((x, i) => {
-    if (x.skip) return "<tr><td>" + x.item + "</td><td colspan='5' class='muted'>" + x.reason + "</td></tr>";
+    if (x.skip) return "<tr><td>" + x.item + "</td><td colspan='6' class='muted'>" + x.reason + "</td></tr>";
     const note = "base " + x.baseline + "p, ceiling " + x.ceiling + "p" +
       (x.fast_repeater ? ", repeats fast" : "") +
-      (x.crashed_now ? ", crashed this week, wait to list" : "");
-    const ctl = "<input id='flipq" + i + "' type='number' min='1' value='" + x.qty +
+      (x.crashed_now ? ", crashed this week, wait to list" : "") +
+      "<br>" + x.reason;
+    const defq = x.owned > 0 ? x.owned : x.buy;
+    const ctl = "<input id='flipq" + i + "' type='number' min='1' value='" + defq +
       "' style='width:64px; font-size:16px; padding:6px; border-radius:8px; background:#111; color:#eee; border:1px solid #555;'>" +
       " <button id='flipb" + i + "' onclick=\"listPart('flipb" + i + "', '" + x.slug + "', " +
       x.target + ", parseInt(document.getElementById('flipq" + i + "').value))\">List at " +
       x.target + "p</button>";
-    return "<tr><td>" + x.item + "</td><td>" + x.ducats + "d</td><td>" + x.target +
-      "p</td><td>x" + x.qty + "</td><td>" + ctl + "</td><td class='muted'>" + note + "</td></tr>";
+    return "<tr><td>" + x.item + "</td><td>x" + x.owned + "</td><td>" + x.ducats + "d</td><td>" + x.target +
+      "p</td><td>x" + x.buy + "</td><td>" + ctl + "</td><td class='muted'>" + note + "</td></tr>";
   }).join("");
   out.innerHTML = head +
-    "<h3>Flip plan, richest first</h3><table><thead><tr><th>Mod</th><th>Cost</th><th>List at</th><th>Buy</th><th></th><th>Why</th></tr></thead><tbody>" +
-    (body || "<tr><td colspan='6' class='muted'>Nothing this visit.</td></tr>") + "</tbody></table>";
+    "<h3>Flip plan, richest first</h3><table><thead><tr><th>Mod</th><th>Own</th><th>Cost</th><th>List at</th><th>Buy</th><th></th><th>Why</th></tr></thead><tbody>" +
+    (body || "<tr><td colspan='7' class='muted'>Nothing this visit.</td></tr>") + "</tbody></table>";
 }
 async function loadBaro() {
   const r = await fetch("/api/baro");
