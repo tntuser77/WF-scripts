@@ -122,7 +122,12 @@ a { color: #8ab4ff; }
 <section class="wide">
 <h2>Ducats and Baro</h2>
 <div class="muted" id="baroBox">Checking the trader...</div>
-<div id="fodderOut" style="margin-top:10px;"></div>
+<div style="margin-top:10px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+<button onclick="loadFlips()">Plan this visit flips</button>
+<label for="flipHours" style="font-size:17px;">Selling hours per week
+<input type="number" id="flipHours" value="9" min="1" max="80" style="width:64px; font-size:17px; padding:8px; border-radius:8px; background:#111; color:#eee; border:1px solid #555;"></label>
+</div>
+<div id="flipOut" style="margin-top:10px;"></div>
 </section>
 </main>
 <script src="/static/app.js"></script>

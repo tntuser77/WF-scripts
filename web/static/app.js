@@ -72,13 +72,6 @@ function renderSets(rep, listed) {
   out.innerHTML = note +
     "<h3>Best to sell, most valuable first (highlighted = keep one back, set pays more)</h3><table><thead><tr><th>Item</th><th>Kind</th><th>List qty</th><th>Each</th><th>Value</th><th>Note</th><th></th></tr></thead><tbody>" +
     (acts || "<tr><td colspan='7' class='muted'>None.</td></tr>") + "</tbody></table>";
-  const fod = (rep.fodder || []).slice(0, 15).map(x =>
-    "<tr><td>" + x.part + "</td><td>x" + x.count + "</td><td>" + x.p48 +
-    "p</td><td>" + x.ducats_each + "</td><td>" + x.ducats + "</td></tr>").join("");
-  document.getElementById("fodderOut").innerHTML =
-    "<h3>Ducat fodder (sub 25p parts, " + (rep.fodder_ducats || 0) +
-    " ducats total)</h3><table><thead><tr><th>Part</th><th>Count</th><th>48h</th><th>Ducats each</th><th>Ducats</th></tr></thead><tbody>" +
-    (fod || "<tr><td colspan='5' class='muted'>None.</td></tr>") + "</tbody></table>";
 }
 async function listPart(bid, part, price, count) {
   if (!confirm("List " + count + "x " + part + " at " + price + "p each?")) return;
@@ -91,6 +84,46 @@ async function listPart(bid, part, price, count) {
   const d = await r.json();
   btn.textContent = d.ok ? "Listed" : "Failed";
   if (!d.ok) { btn.disabled = false; alert("Order failed: " + d.error); }
+}
+async function loadFlips() {
+  await fetch("/api/baro/flips?hours=" + document.getElementById("flipHours").value);
+  pollFlips();
+}
+async function pollFlips() {
+  const r = await fetch("/api/baro/flips/status");
+  const d = await r.json();
+  const out = document.getElementById("flipOut");
+  if (d.state === "working") {
+    out.innerHTML = "<div class='muted'>Pricing primed mods...</div>";
+    setTimeout(pollFlips, 2000);
+  } else if (d.state === "done") {
+    renderFlips(d.report);
+  } else if (d.state === "error") {
+    out.innerHTML = "<div class='muted'>Error: " + d.error + "</div>";
+  }
+}
+function renderFlips(rep) {
+  const out = document.getElementById("flipOut");
+  const head = "<div class='muted'>" +
+    ((rep.active ? "Baro is here until " + (rep.expiry || "?") + ". " : "Baro is away. Showing last stock. ") +
+    (rep.ducats_balance != null ? "You hold " + rep.ducats_balance + " ducats. " : "") +
+    "Targets are unranked copies.</div>");
+  const body = (rep.rows || []).map((x, i) => {
+    if (x.skip) return "<tr><td>" + x.item + "</td><td colspan='5' class='muted'>" + x.reason + "</td></tr>";
+    const note = "base " + x.baseline + "p, ceiling " + x.ceiling + "p" +
+      (x.fast_repeater ? ", repeats fast" : "") +
+      (x.crashed_now ? ", crashed this week, wait to list" : "");
+    const ctl = "<input id='flipq" + i + "' type='number' min='1' value='" + x.qty +
+      "' style='width:64px; font-size:16px; padding:6px; border-radius:8px; background:#111; color:#eee; border:1px solid #555;'>" +
+      " <button id='flipb" + i + "' onclick=\"listPart('flipb" + i + "', '" + x.slug + "', " +
+      x.target + ", parseInt(document.getElementById('flipq" + i + "').value))\">List at " +
+      x.target + "p</button>";
+    return "<tr><td>" + x.item + "</td><td>" + x.ducats + "d</td><td>" + x.target +
+      "p</td><td>x" + x.qty + "</td><td>" + ctl + "</td><td class='muted'>" + note + "</td></tr>";
+  }).join("");
+  out.innerHTML = head +
+    "<h3>Flip plan, richest first</h3><table><thead><tr><th>Mod</th><th>Cost</th><th>List at</th><th>Buy</th><th></th><th>Why</th></tr></thead><tbody>" +
+    (body || "<tr><td colspan='6' class='muted'>Nothing this visit.</td></tr>") + "</tbody></table>";
 }
 async function loadBaro() {
   const r = await fetch("/api/baro");
@@ -260,3 +293,4 @@ setInterval(async () => {
 invStatus();
 tileRefresh();
 loadBaro();
+loadFlips();

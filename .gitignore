@@ -10,6 +10,7 @@ set_cache.json
 snapshots/
 my_listings_cache.json
 baro_cache.json
+baro_flip_cache.json
 *.log
 # local sqlite inventory (regenerated from AlecaFrame dump + pricing)
 relics.db

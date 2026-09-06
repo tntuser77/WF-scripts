@@ -424,6 +424,37 @@ def api_baro():
     return jsonify(baro.fetch())
 
 
+_flips = {"state": "idle", "step": "", "report": None, "error": None}
+
+
+def _flips_run(hours: float) -> None:
+    import baro_flip
+    try:
+        _flips.update({"state": "working", "error": None, "report": None,
+                       "step": "pricing primed mods"})
+        _flips["report"] = baro_flip.compute(hours_per_week=hours)
+        _flips.update({"state": "done", "step": "done"})
+    except Exception as e:
+        _flips.update({"state": "error", "error": str(e)[:160]})
+
+
+@app.get("/api/baro/flips")
+def api_baro_flips():
+    try:
+        hours = float(request.args.get("hours", 9))
+    except (TypeError, ValueError):
+        hours = 9
+    if _flips["state"] != "working":
+        _flips.update({"state": "working", "step": "starting"})
+        threading.Thread(target=_flips_run, args=(hours,), daemon=True).start()
+    return jsonify({"started": True, "state": _flips["state"]})
+
+
+@app.get("/api/baro/flips/status")
+def api_baro_flips_status():
+    return jsonify({k: v for k, v in _flips.items()})
+
+
 @app.post("/api/orders/sell")
 def api_order_sell():
     import listings
