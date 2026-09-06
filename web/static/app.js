@@ -92,8 +92,15 @@ async function loadFlips() {
   pollFlips();
 }
 async function pollFlips() {
-  const r = await fetch("/api/baro/flips/status");
-  const d = await r.json();
+  let d;
+  try {
+    const r = await fetch("/api/baro/flips/status");
+    d = await r.json();
+  } catch (e) {
+    document.getElementById("flipOut").innerHTML =
+      "<div class='muted'>Server stopped. Relaunch Relic Tools from the Start Menu.</div>";
+    return;
+  }
   const out = document.getElementById("flipOut");
   if (d.state === "working") {
     out.innerHTML = "<div class='muted'>Pricing primed mods...</div>";
@@ -145,9 +152,15 @@ function utcShort(s) {
     timeZone: "UTC"}) + " UTC";
 }
 async function loadBaro() {
-  const r = await fetch("/api/baro");
-  const d = await r.json();
   const box = document.getElementById("baroBox");
+  let d;
+  try {
+    const r = await fetch("/api/baro");
+    d = await r.json();
+  } catch (e) {
+    box.textContent = "Server stopped. Relaunch Relic Tools from the Start Menu.";
+    return;
+  }
   if (!d.primed || !d.primed.length) {
     box.textContent = "Trader feed unavailable right now.";
     return;
