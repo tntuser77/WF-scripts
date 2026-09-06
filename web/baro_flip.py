@@ -133,25 +133,19 @@ def analyze(item: str, ducats: int, credits: int) -> dict:
             "hourly_rate": round(hourly_rate, 2)}
 
 
-def size_qty(row: dict, ducats_balance: float | None, hours_per_week: float) -> dict:
-    """Gross copies wanted. Time capacity and ducat budget race, the lower
-    wins and gets named so the UI can say which bound the row."""
-    time_qty = row["hourly_rate"] * hours_per_week * WINDOW_WEEKS
-    if ducats_balance and row["ducats"]:
-        ducat_qty = ducats_balance / max(row.get("_nmods", 1), 1) / row["ducats"]
-        limited_by = "ducats" if ducat_qty < time_qty else "time"
-    else:
-        ducat_qty = time_qty
-        limited_by = "time"
-    qty = int(min(time_qty, ducat_qty))
+def size_qty(row: dict, hours_per_week: float) -> dict:
+    """Gross copies wanted from time alone. Ducat budget gets allocated
+    later, best returns first, so this names no limit yet."""
+    want = int(row["hourly_rate"] * hours_per_week * WINDOW_WEEKS)
     if row["fast_repeater"]:
-        qty = int(qty * REPEAT_HALVE)
-    if qty < 1:
-        return {"qty": 0, "limited_by": limited_by,
-                "reason": "time and budget cover less than 1 copy"}
-    return {"qty": qty, "limited_by": limited_by,
+        want = int(want * REPEAT_HALVE)
+    if want < 1:
+        return {"qty": 0,
+                "reason": f"{row['hourly_rate']}/hr x {hours_per_week}h x "
+                          f"{WINDOW_WEEKS}w covers less than 1 copy"}
+    return {"qty": want,
             "reason": f"{row['hourly_rate']}/hr x {hours_per_week}h x "
-                      f"{WINDOW_WEEKS}w, {limited_by} binds" +
+                      f"{WINDOW_WEEKS}w" +
                       (" halved, fast repeater" if row["fast_repeater"] else "")}
 
 
@@ -179,15 +173,36 @@ def compute(hours_per_week: float = 9.0) -> dict:
         if row.get("skip"):
             rows.append(row)
             continue
-        row["_nmods"] = max(len(mods), 1)
-        row.update(size_qty(row, balance, hours_per_week))
+        row["ppd"] = round(row["target"] / row["ducats"], 3) if row["ducats"] else 0
+        row.update(size_qty(row, hours_per_week))
         row["owned"] = owned.get(row["slug"], 0)
-        row["buy"] = max(0, row["qty"] - row["owned"])
+        row["need"] = max(0, row["qty"] - row["owned"])
+        rows.append(row)
+    # Ducats go to the best plat per ducat first. Whatever is left stays
+    # unspent for next visit instead of dribbling into weak returns.
+    priced = sorted([r for r in rows if not r.get("skip")],
+                    key=lambda r: r["ppd"], reverse=True)
+    remaining = balance if balance else None
+    best = priced[0]["item"] if priced else ""
+    for row in priced:
+        if remaining is None or not row["ducats"]:
+            row["buy"] = row["need"]
+            row["limited_by"] = "time"
+            continue
+        afford = int(remaining // row["ducats"])
+        row["buy"] = min(row["need"], afford)
+        row["limited_by"] = "ducats" if afford < row["need"] else "time"
+        if row["buy"] < row["need"]:
+            row["reason"] += f". Ducats earn more on {best}, saving the rest" \
+                if row["item"] != best else ". Budget runs out here"
+        remaining -= row["buy"] * row["ducats"]
+    for row in rows:
+        if row.get("skip"):
+            continue
         row["credit_total"] = (row["credits"] or 0) * row["buy"]
         row["expect_plat"] = round(row["target"] * row["buy"], 1)
-        rows.append(row)
     rows.sort(key=lambda r: r.get("expect_plat", 0), reverse=True)
     return {"active": visit.get("active"), "expiry": visit.get("expiry"),
             "location": visit.get("location"), "stale": visit.get("stale"),
-            "ducats_balance": balance, "hours_per_week": hours_per_week,
-            "rows": rows}
+            "ducats_balance": balance, "unspent_ducats": remaining,
+            "hours_per_week": hours_per_week, "rows": rows}

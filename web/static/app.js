@@ -112,7 +112,7 @@ function renderFlips(rep) {
     "Targets are unranked copies.</div>");
   const body = (rep.rows || []).map((x, i) => {
     if (x.skip) return "<tr><td>" + x.item + "</td><td colspan='6' class='muted'>" + x.reason + "</td></tr>";
-    const note = "base " + x.baseline + "p, ceiling " + x.ceiling + "p" +
+    const note = x.ppd + "p per ducat, base " + x.baseline + "p, ceiling " + x.ceiling + "p" +
       (x.fast_repeater ? ", repeats fast" : "") +
       (x.crashed_now ? ", crashed this week, wait to list" : "") +
       "<br>" + x.reason;
