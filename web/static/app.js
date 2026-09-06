@@ -107,11 +107,10 @@ async function pollFlips() {
 function renderFlips(rep) {
   const out = document.getElementById("flipOut");
   const head = "<div class='muted'>" +
-    ((rep.active ? "Baro is here until " + (rep.expiry || "?") + ". " : "Baro is away. Showing last stock. ") +
-    (rep.ducats_balance != null ? "You hold " + rep.ducats_balance + " ducats. " : "") +
     (rep.unspent_ducats != null && rep.ducats_balance != null
-      ? "Plan spends " + (rep.ducats_balance - rep.unspent_ducats) + ", holds " +
-        rep.unspent_ducats + " for next visit. " : "") +
+      ? "Plan spends " + (rep.ducats_balance - rep.unspent_ducats) + " of " +
+        rep.ducats_balance + " ducats, holds " + rep.unspent_ducats +
+        " for next visit. " : "") +
     "Targets are unranked copies.</div>");
   const body = (rep.rows || []).map((x, i) => {
     if (x.skip) return "<tr><td>" + x.item + "</td><td colspan='6' class='muted'>" + x.reason + "</td></tr>";
@@ -139,6 +138,12 @@ function renderFlips(rep) {
     "<h3>Flip plan, richest first</h3><table><thead><tr><th>Mod</th><th>Own</th><th>Cost</th><th>List at</th><th>Buy</th><th></th><th>Why</th></tr></thead><tbody>" +
     (body || "<tr><td colspan='7' class='muted'>Nothing this visit.</td></tr>") + "</tbody></table>";
 }
+function utcShort(s) {
+  const t = new Date(s);
+  return isNaN(t) ? (s || "?") : t.toLocaleString("en-US", {month: "short",
+    day: "numeric", hour: "numeric", minute: "2-digit", hour12: true,
+    timeZone: "UTC"}) + " UTC";
+}
 async function loadBaro() {
   const r = await fetch("/api/baro");
   const d = await r.json();
@@ -147,11 +152,9 @@ async function loadBaro() {
     box.textContent = "Trader feed unavailable right now.";
     return;
   }
-  const when = d.active ? "here until " + (d.expiry || "?") + " at " + (d.location || "?")
-    : "back after " + (d.activation || "?");
-  const have = window._ducats != null ? "You hold " + window._ducats + " ducats. " : "";
-  box.innerHTML = have + "Baro is " + when + ". Primed mods:<br>" +
-    d.primed.map(p => p.item + " " + p.ducats + "d").join(", ") +
+  const when = d.active ? "here until " + utcShort(d.expiry) + " at " + (d.location || "?")
+    : "back after " + utcShort(d.activation);
+  box.innerHTML = "Baro is " + when + "." +
     (d.stale ? "<br><span>Feed is stale.</span>" : "");
 }
 async function saveSnap() {
