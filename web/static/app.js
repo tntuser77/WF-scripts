@@ -320,3 +320,82 @@ setInterval(async () => {
 invStatus();
 tileRefresh();
 loadBaro().then((here) => { if (here) loadFlips(); });
+authRefresh();
+
+async function authRefresh() {
+  let s;
+  try {
+    s = await (await fetch("/api/auth/status")).json();
+  } catch (e) { return; }
+  const logged = !!s.logged_in;
+  document.getElementById("loginBtn").style.display = logged ? "none" : "";
+  for (const id of ["authName", "statusSel", "logoutBtn"])
+    document.getElementById(id).style.display = logged ? "" : "none";
+  if (!logged) return;
+  document.getElementById("authName").textContent = s.username || "";
+  if (s.last_status) document.getElementById("statusSel").value = s.last_status;
+}
+function showLogin() {
+  document.getElementById("loginBox").style.display = "block";
+  document.getElementById("loginErr").textContent = "";
+  document.getElementById("loginEmail").focus();
+}
+function hideLogin() {
+  document.getElementById("loginBox").style.display = "none";
+  document.getElementById("loginPass").value = "";
+  document.getElementById("loginErr").textContent = "";
+}
+async function doLogin() {
+  const email = document.getElementById("loginEmail").value;
+  const passEl = document.getElementById("loginPass");
+  const password = passEl.value;
+  passEl.value = "";
+  document.getElementById("loginErr").textContent = "Signing in...";
+  let out;
+  try {
+    out = await (await fetch("/api/auth/login", {method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({email, password})})).json();
+  } catch (e) {
+    document.getElementById("loginErr").textContent = "Server unreachable.";
+    return;
+  }
+  if (out.ok) {
+    hideLogin();
+    document.getElementById("authMsg").textContent = "";
+    authRefresh();
+  } else {
+    document.getElementById("loginErr").textContent = out.error || "Sign in failed.";
+  }
+}
+async function setPresence() {
+  const sel = document.getElementById("statusSel");
+  const msg = document.getElementById("authMsg");
+  msg.textContent = "Setting...";
+  let out;
+  try {
+    out = await (await fetch("/api/auth/presence", {method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({status: sel.value})})).json();
+  } catch (e) {
+    msg.textContent = "Server unreachable.";
+    return;
+  }
+  if (out.ok) {
+    msg.textContent = "";
+    sel.value = out.status;
+  } else {
+    msg.textContent = out.error || "Could not set presence.";
+    authRefresh();
+  }
+}
+async function doLogout() {
+  await fetch("/api/auth/logout", {method: "POST"});
+  document.getElementById("authMsg").textContent = "";
+  authRefresh();
+}
+async function quitApp() {
+  if (!confirm("Stop the server and close the app?")) return;
+  try { await fetch("/api/quit", {method: "POST"}); } catch (e) {}
+  window.close();
+}

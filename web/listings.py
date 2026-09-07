@@ -1,7 +1,8 @@
 """Already-listed check.
 
-Primary path is authenticated: the user's own JWT (copied once from the
-browser cookie into web/.env as WFM_JWT) calls GET /v1/profile/orders,
+Primary path is authenticated: the user's own JWT (from signing in
+through the UI, or pasted once from a browser cookie into web/.env
+as WFM_JWT) calls GET /v2/orders/my,
 which returns their orders no matter the online status. Invisible hides
 listings from every public view, so a token is the only reliable read.
 
@@ -242,7 +243,7 @@ def create_sell_order(slug: str, price: int, quantity: int,
     import market_items
     tok = token()
     if not tok:
-        return {"ok": False, "error": "no token, add WFM_JWT to web/.env"}
+        return {"ok": False, "error": "not signed in, use Sign in with WFM"}
     if not slug or price < 1 or quantity < 1:
         return {"ok": False, "error": "bad slug, price, or quantity"}
     try:
@@ -276,6 +277,6 @@ def create_sell_order(slug: str, price: int, quantity: int,
     except Exception as e:
         msg = str(e)
         if "401" in msg or "403" in msg:
-            return {"ok": False, "error": "token expired, paste a fresh JWT"}
+            return {"ok": False, "error": "token expired, sign in again"}
         detail = _error_detail(e)
         return {"ok": False, "error": (msg[:120] + " " + detail).strip()}

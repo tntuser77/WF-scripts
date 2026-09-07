@@ -472,6 +472,34 @@ def api_order_sell():
     return jsonify(out)
 
 
+@app.get("/api/auth/status")
+def api_auth_status():
+    import auth
+    return jsonify(auth.status())
+
+
+@app.post("/api/auth/login")
+def api_auth_login():
+    import auth
+    body = request.get_json(silent=True) or {}
+    out = auth.signin(str(body.get("email", "")),
+                      str(body.get("password", "")))
+    return jsonify(out)
+
+
+@app.post("/api/auth/logout")
+def api_auth_logout():
+    import auth
+    return jsonify(auth.signout())
+
+
+@app.post("/api/auth/presence")
+def api_auth_presence():
+    import auth
+    body = request.get_json(silent=True) or {}
+    return jsonify(auth.set_presence(str(body.get("status", ""))))
+
+
 @app.post("/api/snapshots/save")
 def api_snap_save():
     import snapshots
@@ -763,7 +791,10 @@ if __name__ == "__main__":
         except (ValueError, IndexError):
             idle_timeout = 0
     from werkzeug.serving import make_server
-    _server = make_server("127.0.0.1", 5000, app, threaded=True)
+    try:
+        _server = make_server("127.0.0.1", 5000, app, threaded=True)
+    except OSError:
+        sys.exit(0)  # lost the bind race, another copy serves this port
     if idle_timeout > 0:
         threading.Thread(target=_idle_watchdog, args=(idle_timeout,), daemon=True).start()
     _server.serve_forever()

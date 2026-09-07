@@ -39,7 +39,7 @@ $win = Start-Process -FilePath $chrome -ArgumentList "--app=$startUrl", "--user-
 
 if (-not $serverReady) {
   $ownServer = $true
-  Start-Process -FilePath $venvPy -ArgumentList "`"$app`" --exit-when-idle 900"
+  Start-Process -FilePath $venvPy -ArgumentList "`"$app`" --exit-when-idle 180"
 }
 
 # Wait until the window closes (X button) or the server goes away (Quit button).

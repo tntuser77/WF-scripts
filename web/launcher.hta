@@ -26,7 +26,7 @@ Else
   serverExe = repoRoot & "\.venv\Scripts\pythonw.exe"
   serverScript = webDir & "\app.py"
   splashUrl = "file:///" & Replace(Replace(webDir & "\static\loading.html", "\", "/"), " ", "%20")
-  sh.Run """" & serverExe & """ """ & serverScript & """ --exit-when-idle 900", 0, False
+  sh.Run """" & serverExe & """ """ & serverScript & """ --exit-when-idle 180", 0, False
   sh.Run """" & chromeExe & """ --app=" & splashUrl & " --user-data-dir=""" & profileDir & """ --no-first-run --no-default-browser-check", 1, False
 End If
 

@@ -25,3 +25,5 @@ WFM-Relic-Tools/
 # secrets
 web/.env
 .env
+# local WFM session (device id, last presence; token lives in web/.env)
+wfm_session.json

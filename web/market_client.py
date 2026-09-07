@@ -81,6 +81,22 @@ def get_json_auth(url: str, token: str) -> dict:
     return _get_json(url, {"Authorization": f"Bearer {token}"})
 
 
+def post_json(url: str, body: dict, headers: dict | None = None) -> tuple:
+    """Throttled POST returning (status, json, headers). Bodies are never
+    logged, so password bearing calls like signin can use the same budget."""
+    _throttle()
+    resp = _session.post(url, json=body, timeout=15, headers=headers or {})
+    with _lock:
+        _stats["total"] += 1
+        if resp.status_code == 429:
+            _stats["last_429"] = time.strftime("%H:%M:%S")
+    try:
+        data = resp.json()
+    except ValueError:
+        data = {}
+    return resp.status_code, data, resp.headers
+
+
 def post_json_auth(url: str, token: str, body: dict) -> dict:
     """Rate-limited POST with Bearer auth. For order writes, not pricing."""
     _throttle()

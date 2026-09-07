@@ -55,7 +55,30 @@ window.addEventListener("unhandledrejection", function (e) {
 <span style="flex:1;"></span>
 <span class="muted" style="font-size:16px;">Tile scanner:</span>
 <button id="tileBtn" onclick="tileToggle()">Start</button>
-<span id="tileState" class="muted" style="font-size:16px;"></span></header>
+<span id="tileState" class="muted" style="font-size:16px;"></span>
+<span id="authArea" style="display:flex; align-items:center; gap:8px;">
+<button id="loginBtn" onclick="showLogin()" title="Sign in with warframe.market">Sign in with WFM</button>
+<span id="authName" class="muted" style="font-size:16px; display:none;"></span>
+<select id="statusSel" onchange="setPresence()" style="display:none; font-size:17px; padding:8px; border-radius:8px; background:#111; color:#eee; border:1px solid #555;" title="Market presence">
+<option value="online">Online</option>
+<option value="ingame">In game</option>
+<option value="invisible">Invisible</option>
+</select>
+<button id="logoutBtn" onclick="doLogout()" style="display:none;" title="Sign out">Sign out</button>
+</span>
+<span id="authMsg" class="muted" style="font-size:16px;"></span>
+<button onclick="quitApp()" title="Stop the server and close">Quit</button></header>
+<div id="loginBox" style="display:none; position:fixed; top:70px; right:28px; z-index:20; background:#1e1e24; border:1px solid #555; border-radius:10px; padding:20px; width:320px;">
+<div style="font-size:19px; margin-bottom:12px;">Sign in with WFM</div>
+<input type="text" id="loginEmail" placeholder="WFM email" autocomplete="username" style="margin-bottom:10px;">
+<input type="password" id="loginPass" placeholder="WFM password" autocomplete="current-password" onkeydown="if (event.key === 'Enter') doLogin()" style="width:100%; box-sizing:border-box; padding:14px 16px; font-size:19px; border-radius:8px; border:1px solid #555; background:#111; color:#eee; margin-bottom:12px;">
+<div style="display:flex; gap:10px; align-items:center;">
+<button onclick="doLogin()">Sign in</button>
+<button onclick="hideLogin()">Cancel</button>
+<span id="loginErr" class="muted"></span>
+</div>
+<div class="muted" style="margin-top:10px;">Password is used once to get a token, then dropped. Nothing secret is stored but the token.</div>
+</div>
 <main>
 <section class="wide">
 <h2>Price search</h2>
