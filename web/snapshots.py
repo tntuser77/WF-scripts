@@ -1,4 +1,4 @@
-"""Session snapshots: before/after AlecaFrame dump diffs.
+"""Session snapshots: before/after inventory dump diffs.
 
 Each snapshot stores plat, part counts keyed by market slug, and relic
 counts keyed by base name. Diffing two snapshots shows relics out,

@@ -6,7 +6,7 @@ Target block is the frames-only plan from chat:
   200x Axi H5 flawless, 0x Meso E5.
 Parts goal is 100 of each frame part.
 
-Reads the same AlecaFrame dump as advisor, so counts match the
+Reads the same inventory dump as advisor, so counts match the
 rest of the page. No market calls, fully offline.
 """
 

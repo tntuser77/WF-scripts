@@ -417,7 +417,7 @@ def _sets_run() -> None:
     import listings
     try:
         _sets.update({"state": "working", "error": None, "report": None,
-                      "step": "reading AlecaFrame dump"})
+                      "step": "reading inventory dump"})
         live = advisor.owned_from_dump()
         _sets["plat"] = live["plat"]
         _sets["ducats"] = live.get("ducats")
@@ -645,9 +645,10 @@ _price_lock = threading.Lock()
 
 
 def _dump_info() -> dict:
-    dump = os.path.join(os.environ.get("LOCALAPPDATA", ""), "AlecaFrame", "lastData.dat")
+    from decrypt import find_inventory
+    source, dump = find_inventory()
     p = Path(dump)
-    if not p.exists():
+    if not source:
         return {"path": dump, "exists": False}
     mtime = p.stat().st_mtime
     age_s = time.time() - mtime
@@ -657,7 +658,7 @@ def _dump_info() -> dict:
         age = f"{age_s / 3600:.1f} hours ago"
     else:
         age = f"{age_s / 86400:.1f} days ago"
-    return {"path": dump, "exists": True,
+    return {"path": dump, "exists": True, "source": source,
             "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(mtime)),
             "age": age}
 
@@ -725,9 +726,9 @@ def _inventory_run() -> None:
         if not info["exists"]:
             _inv.update({"state": "error", "error": f"dump not found: {info['path']}"})
             return
-        _inv["step"] = "decrypting AlecaFrame dump"
-        from decrypt import process_data
-        data = json.loads(process_data(info["path"]))
+        _inv["step"] = f"reading {info['source']} dump"
+        from decrypt import load_inventory
+        data = load_inventory(info["path"])
         relic_info = _wfcd_relics()
         _inv["step"] = "matching local relics"
         by_unique = {r["uniqueName"]: r for r in relic_info}

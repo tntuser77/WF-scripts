@@ -1,6 +1,6 @@
 """Set-aware sell advisor.
 
-Reads the AlecaFrame dump, groups owned prime parts into sets via sets.py,
+Reads the inventory dump (WFHelper or AlecaFrame), groups owned prime parts into sets via sets.py,
 prices parts at 48h medians, prices full sets via top sell listings on
 *_set slugs, and sources missing pieces from Relics.json.
 
@@ -38,14 +38,12 @@ ODDS = {
     "radiant": (0.50, 0.40, 0.10),
 }
 
-DUMP_PATH = os.path.join(os.environ.get("LOCALAPPDATA", ""),
-                         "AlecaFrame", "lastData.dat")
 WFCD_CACHE = BASE / "Relics.json"
 
 
 def load_dump() -> dict:
-    from decrypt import process_data
-    return json.loads(process_data(DUMP_PATH))
+    from decrypt import load_inventory
+    return load_inventory()
 
 
 def owned_from_dump(data: dict | None = None) -> dict:
