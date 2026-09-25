@@ -379,9 +379,9 @@ async function invStatus() {
   const d = await r.json();
   const age = document.getElementById("dumpAge");
   if (d.dump && d.dump.exists) {
-    age.textContent = "AlecaFrame dump updated " + d.dump.age + " (" + d.dump.mtime + ")";
+    age.textContent = d.dump.source + " dump updated " + d.dump.age + " (" + d.dump.mtime + ")";
   } else {
-    age.textContent = "AlecaFrame dump not found.";
+    age.textContent = "No inventory dump found (WFHelper or AlecaFrame).";
   }
   return d;
 }

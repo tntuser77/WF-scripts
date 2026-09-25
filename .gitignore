@@ -15,7 +15,7 @@ baro_flip_cache.json
 *.log
 # local wiki snapshot (regenerated from live wiki, see web/wiki.py)
 input.html
-# local sqlite inventory (regenerated from AlecaFrame dump + pricing)
+# local sqlite inventory (regenerated from inventory dump + pricing)
 relics.db
 
 # local launcher profile (regenerated on launch)
