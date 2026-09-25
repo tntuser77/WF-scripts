@@ -118,6 +118,79 @@ def _avg_medians(buckets: list) -> float | None:
     return round(sum(medians) / len(medians), 2)
 
 
+RANK0_MIN_VOL_48H = 5  # sales needed before the 48h rank-0 median is trusted
+
+
+def _rank0_median(buckets: list, min_vol: int = 0) -> tuple:
+    """(median, volume) over unranked (rank 0) buckets. Median resists the
+    single troll-priced sale that the mean folds straight in."""
+    import statistics
+    meds = [float(e["median"]) for e in buckets
+            if isinstance(e, dict) and e.get("mod_rank") == 0
+            and e.get("median") is not None]
+    if not meds:
+        return None, 0
+    vol = sum(int(e.get("volume") or 0) for e in buckets
+              if isinstance(e, dict) and e.get("mod_rank") == 0)
+    if vol < min_vol:
+        return None, vol
+    return round(statistics.median(meds), 2), vol
+
+
+def _mod_medians(closed: dict) -> tuple:
+    """Rank-aware (median_90d, median_48h) for mod items.
+
+    Statistics buckets mix every rank, so an average folds max-rank
+    sales and one-off troll listings into the price of the unranked
+    copy you actually own. Unranked buckets only; the thin 48h window
+    falls back to 90d under RANK0_MIN_VOL_48H sales."""
+    b48 = closed.get("48hours", [])
+    b90 = closed.get("90days", [])
+    p90, _ = _rank0_median(b90)
+    p48, vol48 = _rank0_median(b48, RANK0_MIN_VOL_48H)
+    if p48 is None:
+        p48 = p90
+    return p90, p48
+
+
+def _has_ranks(closed: dict) -> bool:
+    for window in ("48hours", "90days"):
+        for e in closed.get(window, []) or []:
+            if isinstance(e, dict) and e.get("mod_rank") is not None:
+                return True
+    return False
+
+
+def arcane_max_median(slug: str, max_rank: int | None = None) -> dict:
+    """90d median at max rank for one arcane. The tracker values a single
+    copy at this divided by 21. Own cache keys, 6h TTL."""
+    import statistics
+    cache = load_cache()
+    key = f"maxrank:{slug}"
+    entry = cache.get(key)
+    now = time.time()
+    if entry and entry.get("v") == 1 and now - entry.get("fetched_at", 0) < CACHE_TTL_HOURS * 3600:
+        with _lock:
+            _stats["cache_hits"] += 1
+        return {"market_link": entry["market_link"],
+                "median_max": entry["median_max"]}
+    data = _get_json(f"https://api.warframe.market/v1/items/{slug}/statistics")
+    buckets = (data.get("payload", {}).get("statistics_closed", {}).get("90days", [])
+               or [])
+    ranks = [e.get("mod_rank") for e in buckets
+             if isinstance(e, dict) and e.get("mod_rank") is not None]
+    top = max_rank if max_rank is not None else (max(ranks) if ranks else None)
+    meds = [float(e["median"]) for e in buckets
+            if isinstance(e, dict) and e.get("mod_rank") == top
+            and e.get("median") is not None]
+    out = {"market_link": f"https://warframe.market/items/{slug}",
+           "median_max": round(statistics.median(meds), 2) if meds else None}
+    cache[key] = {"v": 1, "median_max": out["median_max"],
+                  "market_link": out["market_link"], "fetched_at": now}
+    save_cache(cache)
+    return out
+
+
 def load_cache() -> dict:
     if CACHE_FILE.exists():
         try:
@@ -135,11 +208,14 @@ _top_cache: dict = {}
 
 
 def part_statistics(slug: str) -> dict:
-    """Returns {market_link, median_90d, median_48h}. Uses 6h disk cache."""
+    """Returns {market_link, median_90d, median_48h}. Uses 6h disk cache.
+
+    Mod items price from unranked buckets only (cache v2); everything
+    else keeps the all-bucket average."""
     cache = load_cache()
     entry = cache.get(slug)
     now = time.time()
-    if entry and now - entry.get("fetched_at", 0) < CACHE_TTL_HOURS * 3600:
+    if entry and entry.get("v") == 2 and now - entry.get("fetched_at", 0) < CACHE_TTL_HOURS * 3600:
         with _lock:
             _stats["cache_hits"] += 1
         return {"market_link": entry["market_link"],
@@ -149,10 +225,14 @@ def part_statistics(slug: str) -> dict:
     url = f"https://api.warframe.market/v1/items/{slug}/statistics"
     data = _get_json(url)
     closed = data.get("payload", {}).get("statistics_closed", {})
+    if _has_ranks(closed):
+        p90, p48 = _mod_medians(closed)
+    else:
+        p90 = _avg_medians(closed.get("90days", []))
+        p48 = _avg_medians(closed.get("48hours", []))
     out = {"market_link": f"https://warframe.market/items/{slug}",
-           "median_90d": _avg_medians(closed.get("90days", [])),
-           "median_48h": _avg_medians(closed.get("48hours", []))}
-    cache[slug] = {"price_90d": out["median_90d"], "price_48h": out["median_48h"],
+           "median_90d": p90, "median_48h": p48}
+    cache[slug] = {"v": 2, "price_90d": out["median_90d"], "price_48h": out["median_48h"],
                    "market_link": out["market_link"], "fetched_at": now}
     save_cache(cache)
     return out

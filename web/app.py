@@ -1,5 +1,6 @@
 """Local WFM web UI. Same PC only, binds 127.0.0.1."""
 
+import configparser
 import difflib
 import json
 import os
@@ -337,6 +338,75 @@ def api_board_refresh():
     return jsonify({"started": True})
 
 
+MEXIAN_INI = BASE / "mexian_timings.ini"
+MEXIAN_DEFAULTS = {
+    "normal": {"EtoF": 40, "FtoJump": 30, "JumpHold": 30, "JumpToRoll": 30},
+    "volt": {"EtoF": 25, "FtoJump": 30, "JumpHold": 30, "JumpToRoll": 30},
+    "voltMode": False,
+}
+
+
+def _mexian_read() -> dict:
+    out = {"normal": dict(MEXIAN_DEFAULTS["normal"]),
+           "volt": dict(MEXIAN_DEFAULTS["volt"]),
+           "voltMode": MEXIAN_DEFAULTS["voltMode"]}
+    cfg = configparser.ConfigParser()
+    try:
+        if MEXIAN_INI.exists():
+            cfg.read(MEXIAN_INI, encoding="utf-8")
+            for section in ("Normal", "Volt"):
+                key = section.lower()
+                for field in ("EtoF", "FtoJump", "JumpHold", "JumpToRoll"):
+                    try:
+                        out[key][field] = max(0, min(500, int(cfg.get(section, field))))
+                    except (configparser.Error, ValueError):
+                        pass
+            try:
+                out["voltMode"] = cfg.getboolean("Mode", "volt")
+            except (configparser.Error, ValueError):
+                pass
+    except Exception:
+        pass
+    return out
+
+
+def _mexian_write(data: dict) -> dict:
+    cfg = configparser.ConfigParser()
+    if MEXIAN_INI.exists():
+        try:
+            cfg.read(MEXIAN_INI, encoding="utf-8")
+        except Exception:
+            pass
+    for section in ("Normal", "Volt"):
+        if section not in cfg:
+            cfg[section] = {}
+        key = section.lower()
+        for field in ("EtoF", "FtoJump", "JumpHold", "JumpToRoll"):
+            if key in data and field in data[key]:
+                try:
+                    cfg[section][field] = str(max(0, min(500, int(data[key][field]))))
+                except (TypeError, ValueError):
+                    pass
+    if "Mode" not in cfg:
+        cfg["Mode"] = {}
+    if "voltMode" in data:
+        cfg["Mode"]["volt"] = "1" if data["voltMode"] else "0"
+    with open(MEXIAN_INI, "w", encoding="utf-8") as f:
+        cfg.write(f)
+    return _mexian_read()
+
+
+@app.get("/api/mexian")
+def api_mexian_get():
+    return jsonify({"ok": True, **_mexian_read()})
+
+
+@app.post("/api/mexian")
+def api_mexian_post():
+    body = request.get_json(silent=True) or {}
+    return jsonify({"ok": True, **_mexian_write(body)})
+
+
 _sets = {"state": "idle", "step": "", "done": 0, "total": 0,
          "updated": None, "report": None, "plat": None, "ducats": None,
          "listed": None, "error": None}
@@ -517,16 +587,48 @@ def api_snap_list():
     return jsonify({"snaps": snapshots.list_all()})
 
 
+_snaps = {"state": "idle", "step": "", "done": 0, "total": 0,
+          "a": "", "b": "", "diff": None, "error": None}
+
+
 @app.get("/api/snapshots/diff")
 def api_snap_diff():
-    import snapshots
     a = request.args.get("a", "")
     b = request.args.get("b", "")
+    if _snaps["state"] != "working":
+        _snaps.update({"state": "working", "step": "starting",
+                       "done": 0, "total": 0, "a": a, "b": b,
+                       "diff": None, "error": None})
+        threading.Thread(target=_snap_run, args=(a, b), daemon=True).start()
+    return jsonify({"started": True, "state": _snaps["state"]})
+
+
+@app.get("/api/snapshots/diff/status")
+def api_snap_diff_status():
+    return jsonify({k: v for k, v in _snaps.items()})
+
+
+def _snap_run(a_file: str, b_file: str) -> None:
+    import snapshots
     try:
-        return jsonify({"ok": True, "diff": snapshots.diff(
-            snapshots.load(a), snapshots.load(b))})
+        _snaps.update({"step": "loading snapshots"})
+        a = snapshots.load(a_file)
+        b = snapshots.load(b_file)
+
+        def _prog(i: int, n: int, label: str):
+            _snaps.update({"done": i, "total": n, "step": f"pricing {label}"})
+            if _snaps.get("state") != "working":
+                raise InterruptedError("stopped")
+        _snaps.update({"step": "pricing gained and lost parts"})
+        _snaps["diff"] = snapshots.diff(a, b, progress=_prog)
+        if _snaps.get("state") != "working":
+            return
+        _snaps.update({"state": "done", "step": "done",
+                       "done": _snaps.get("total", 0)})
+    except InterruptedError:
+        _snaps.update({"state": "idle", "step": "stopped"})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+        _snaps.update({"state": "error", "error": str(e)[:300]})
 
 
 _inv = {"state": "idle", "step": "", "done": 0, "total": 0,
@@ -694,21 +796,83 @@ def api_inventory_status():
     return jsonify(base)
 
 
+@app.get("/api/farm")
+def api_farm():
+    import farm
+    try:
+        return jsonify(farm.farm_status())
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)[:300]})
+
+
+TILE_LOG = BASE / "tile_scanner.log"
+
+
 @app.get("/api/tile")
 def api_tile():
+    _tile_poll()
+    return jsonify({"running": _tile_running(), "info": _tile_last})
+
+
+def _tile_running() -> bool:
+    return _tile_proc is not None and _tile_proc.poll() is None
+
+
+def _tile_poll() -> None:
+    """If the scanner process died, record its exit code and log tail so
+    the button doesn't just flip back to Start with no explanation."""
     global _tile_proc
-    running = _tile_proc is not None and _tile_proc.poll() is None
-    return jsonify({"running": running, "info": _tile_last})
+    if _tile_proc is None or _tile_proc.poll() is None:
+        return
+    code = _tile_proc.poll()
+    _tile_last["exit_code"] = code
+    tail = ""
+    try:
+        if TILE_LOG.exists():
+            lines = TILE_LOG.read_text(encoding="utf-8", errors="replace").splitlines()
+            tail = "\n".join(lines[-15:])
+    except Exception:
+        pass
+    prev = str(_tile_last.get("status", ""))
+    if "started pid" in prev or "running" in prev:
+        # Fen's overlay closes itself on right-click/Esc with exit 0, so a
+        # clean exit means the user closed it, not a crash.
+        _tile_last["status"] = "stopped" if code == 0 else f"crashed (exit {code})"
+    _tile_last["error"] = tail[-800:] if tail else f"exit {code}, no log"
+    _tile_proc = None
 
 
 @app.post("/api/tile/start")
 def api_tile_start():
     global _tile_proc
-    if _tile_proc is not None and _tile_proc.poll() is None:
+    _tile_poll()
+    if _tile_running():
         return jsonify({"running": True})
     script = BASE / "scripts" / "tilescanner" / "main.py"
-    _tile_proc = subprocess.Popen([sys.executable, str(script)], cwd=str(script.parent))
-    _tile_last["status"] = f"started pid {_tile_proc.pid}"
+    if not script.exists():
+        _tile_last.update({"status": "script missing", "error": str(script)})
+        return jsonify({"running": False, "error": str(script)}), 500
+    try:
+        logf = open(TILE_LOG, "a", encoding="utf-8", errors="replace")
+        try:
+            logf.write(f"\n--- tile start {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+            logf.flush()
+            _tile_proc = subprocess.Popen(
+                [sys.executable, "-u", str(script), "--web"],
+                cwd=str(script.parent),
+                stdout=logf, stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL)
+        finally:
+            # Child keeps its own handle; close the parent copy.
+            try:
+                logf.close()
+            except Exception:
+                pass
+    except Exception as e:
+        _tile_last.update({"status": f"launch failed: {e}", "error": str(e)})
+        return jsonify({"running": False, "error": str(e)}), 500
+    _tile_last.update({"status": f"started pid {_tile_proc.pid}",
+                       "exit_code": None, "error": None})
     return jsonify({"running": True, "pid": _tile_proc.pid})
 
 
@@ -717,7 +881,98 @@ def api_tile_stop():
     global _tile_proc
     if _tile_proc is not None and _tile_proc.poll() is None:
         _tile_proc.terminate()
-    _tile_last["status"] = "stopped"
+        try:
+            _tile_proc.wait(timeout=5)
+        except Exception:
+            try:
+                _tile_proc.kill()
+            except Exception:
+                pass
+    _tile_proc = None
+    _tile_last.update({"status": "stopped", "exit_code": None})
+    return jsonify({"running": False})
+
+
+_caps_proc = None
+_caps_last = {"status": "stopped"}
+CAPS_SCRIPT = Path(r"C:\Users\Elijah\Pictures\WarframeCaps\sort_caps.py")
+CAPS_LOG = BASE / "caps_sorter.log"
+
+
+def _caps_running() -> bool:
+    return _caps_proc is not None and _caps_proc.poll() is None
+
+
+def _caps_poll() -> None:
+    global _caps_proc
+    if _caps_proc is None or _caps_proc.poll() is None:
+        return
+    code = _caps_proc.poll()
+    tail = ""
+    try:
+        if CAPS_LOG.exists():
+            lines = CAPS_LOG.read_text(encoding="utf-8", errors="replace").splitlines()
+            tail = "\n".join(lines[-15:])
+    except Exception:
+        pass
+    _caps_last["exit_code"] = code
+    _caps_last["status"] = "stopped" if code == 0 else f"crashed (exit {code})"
+    _caps_last["error"] = tail[-800:] if tail else f"exit {code}, no log"
+    _caps_proc = None
+
+
+@app.get("/api/caps")
+def api_caps():
+    _caps_poll()
+    return jsonify({"running": _caps_running(), "info": _caps_last})
+
+
+@app.post("/api/caps/start")
+def api_caps_start():
+    global _caps_proc
+    _caps_poll()
+    if _caps_running():
+        return jsonify({"running": True})
+    if not CAPS_SCRIPT.exists():
+        _caps_last.update({"status": "script missing", "error": str(CAPS_SCRIPT)})
+        return jsonify({"running": False, "error": str(CAPS_SCRIPT)}), 500
+    try:
+        logf = open(CAPS_LOG, "a", encoding="utf-8", errors="replace")
+        try:
+            logf.write(f"\n--- caps start {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+            logf.flush()
+            _caps_proc = subprocess.Popen(
+                [sys.executable, "-u", str(CAPS_SCRIPT)],
+                cwd=str(CAPS_SCRIPT.parent),
+                stdout=logf, stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL)
+        finally:
+            try:
+                logf.close()
+            except Exception:
+                pass
+    except Exception as e:
+        _caps_last.update({"status": f"launch failed: {e}", "error": str(e)})
+        return jsonify({"running": False, "error": str(e)}), 500
+    _caps_last.update({"status": f"started pid {_caps_proc.pid}",
+                       "exit_code": None, "error": None})
+    return jsonify({"running": True, "pid": _caps_proc.pid})
+
+
+@app.post("/api/caps/stop")
+def api_caps_stop():
+    global _caps_proc
+    if _caps_proc is not None and _caps_proc.poll() is None:
+        _caps_proc.terminate()
+        try:
+            _caps_proc.wait(timeout=5)
+        except Exception:
+            try:
+                _caps_proc.kill()
+            except Exception:
+                pass
+    _caps_proc = None
+    _caps_last.update({"status": "stopped", "exit_code": None})
     return jsonify({"running": False})
 
 
@@ -745,12 +1000,26 @@ def _log(msg: str) -> None:
 
 def _stop_everything() -> None:
     _board["running"] = False
-    global _tile_proc
+    global _tile_proc, _caps_proc
     try:
         if _tile_proc is not None and _tile_proc.poll() is None:
             _tile_proc.terminate()
     except Exception:
         pass
+    finally:
+        _tile_proc = None
+        _tile_last["status"] = "stopped"
+    try:
+        if _caps_proc is not None and _caps_proc.poll() is None:
+            _caps_proc.terminate()
+    except Exception:
+        pass
+    finally:
+        _caps_proc = None
+        try:
+            _caps_last["status"] = "stopped"
+        except Exception:
+            pass
 
 
 def _idle_watchdog(timeout_s: int) -> None:

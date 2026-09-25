@@ -13,6 +13,10 @@ section { background: #1e1e24; border: 1px solid #333; border-radius: 10px; padd
 section.wide { grid-column: 1 / -1; }
 h2 { margin: 0 0 14px; font-size: 24px; }
 input[type=text] { width: 100%; box-sizing: border-box; padding: 14px 16px; font-size: 19px; border-radius: 8px; border: 1px solid #555; background: #111; color: #eee; }
+input[type=range] { width: 220px; accent-color: #8ab4ff; }
+.mexrow { display: flex; gap: 12px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+.mexrow label { width: 130px; font-size: 16px; }
+.mexval { width: 64px; font-size: 16px; color: #8ab4ff; }
 .searchrow { display: flex; gap: 12px; }
 .searchrow input { flex: 1; }
 button { padding: 12px 20px; font-size: 17px; border-radius: 8px; border: 1px solid #555; background: #2c2c34; color: #eee; cursor: pointer; white-space: nowrap; }
@@ -56,6 +60,9 @@ window.addEventListener("unhandledrejection", function (e) {
 <span class="muted" style="font-size:16px;">Tile scanner:</span>
 <button id="tileBtn" onclick="tileToggle()">Start</button>
 <span id="tileState" class="muted" style="font-size:16px;"></span>
+<span class="muted" style="font-size:16px;">Cap sorter:</span>
+<button id="capsBtn" onclick="capsToggle()">Open sorter</button>
+<span id="capsState" class="muted" style="font-size:16px;"></span>
 <span id="authArea" style="display:flex; align-items:center; gap:8px;">
 <button id="loginBtn" onclick="showLogin()" title="Sign in with warframe.market">Sign in with WFM</button>
 <span id="authName" class="muted" style="font-size:16px; display:none;"></span>
@@ -124,6 +131,11 @@ window.addEventListener("unhandledrejection", function (e) {
 <div id="boardLog" class="muted" style="font-size:15px;"></div>
 </details>
 </section>
+<section class="wide">
+<h2>Mexian macro timing</h2>
+<div class="muted">Slider writes to <span style="font-family:monospace;">mexian_timings.ini</span> and the AHK macro picks it up on the next scroll. No reload needed. Milliseconds. Set it to match your attack speed.</div>
+<div class="mexrow" style="margin-top:12px;"><label for="mex_EtoF">Melee to swap</label><input type="range" id="mex_EtoF" min="0" max="200" step="1" value="40" oninput="mexInput()"><span class="mexval" id="mex_EtoF_v">40ms</span></div>
+<div><span class="muted" id="mexStatus">Loading...</span></div>
 </section>
 <section class="wide">
 <h2>Relic inventory</h2>
@@ -156,7 +168,13 @@ window.addEventListener("unhandledrejection", function (e) {
 </section>
 <section class="wide" id="snapSection" style="display:none;">
 <h2>Session tracker</h2>
-<div class="muted">Save one before you crack, one after. Plat gained is estimated at 48h medians.</div>
+<div class="muted">Save one before you crack, one after. Plat gained is estimated at 48h medians. Parts gained under 20p each count as ducats instead.</div>
+<div id="snapProgWrap" style="margin:10px 0; display:none;">
+<div style="background:#111; border:1px solid #555; border-radius:8px; height:26px; overflow:hidden;">
+<div id="snapBar" style="height:100%; width:0%; background:#3d7a44;"></div>
+</div>
+<div class="muted" id="snapCurrent" style="margin-top:6px;"></div>
+</div>
 <div id="snapOut" class="muted" style="margin-top:10px;">No diff yet.</div>
 </section>
 <section class="wide" id="baroSection" style="display:none;">
@@ -168,6 +186,23 @@ window.addEventListener("unhandledrejection", function (e) {
 <input type="number" id="flipHours" value="9" min="1" max="80" style="width:64px; font-size:17px; padding:8px; border-radius:8px; background:#111; color:#eee; border:1px solid #555;"></label>
 </div>
 <div id="flipOut" style="margin-top:10px;"></div>
+</section>
+<section class="wide">
+<h2>Farm tracker: 100x Banshee + Mirage</h2>
+<div class="muted">Base block is 300 Neo B6 radiant, 300 Lith M7 radiant, 220 Lith K5 flawless, 220 Axi A12 flawless, 200 Axi H5 flawless. Need shrinks as parts fill toward 100 each. Counts come from the same AlecaFrame dump as the rest of the page.</div>
+<div style="margin-top:10px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+<button onclick="loadFarm()">Check farm progress</button>
+<span class="muted" id="farmProg">Not checked yet.</span>
+</div>
+<div id="farmOut" style="margin-top:10px;"></div>
+</section>
+<section class="wide">
+<h2>Level cap sorter</h2>
+<div class="muted">Opens the screenshot sorter. Type a frame once, click its cap shots, assign. Anything you do not click stays in Screenshots.</div>
+<div style="margin-top:10px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+<button id="capsBtn2" onclick="capsToggle()">Open sorter</button>
+<span class="muted" id="capsProg">Not running.</span>
+</div>
 </section>
 </main>
 <script src="/static/app.js"></script>

@@ -179,21 +179,47 @@ async function saveSnap() {
 }
 async function diffSnaps() {
   document.getElementById("snapSection").style.display = "";
-  document.getElementById("snapOut").textContent = "Diffing...";
   const l = await (await fetch("/api/snapshots/list")).json();
   const s = l.snaps || [];
   if (s.length < 2) { document.getElementById("snapOut").textContent = "Need two snapshots first."; return; }
-  const r = await fetch("/api/snapshots/diff?a=" + s[1].file + "&b=" + s[0].file);
-  const d = await r.json();
-  if (!d.ok) { document.getElementById("snapOut").textContent = "Error: " + d.error; return; }
-  const x = d.diff;
+  await fetch("/api/snapshots/diff?a=" + s[1].file + "&b=" + s[0].file);
+  pollDiff();
+}
+async function pollDiff() {
+  let d;
+  try {
+    d = await (await fetch("/api/snapshots/diff/status")).json();
+  } catch (e) {
+    document.getElementById("snapOut").textContent = "Server unreachable.";
+    return;
+  }
+  const wrap = document.getElementById("snapProgWrap");
+  const pct = d.total ? Math.round(100 * d.done / d.total) : 0;
+  if (d.state === "working") {
+    wrap.style.display = "block";
+    document.getElementById("snapBar").style.width = pct + "%";
+    document.getElementById("snapCurrent").textContent =
+      d.step + (d.total ? " (" + d.done + "/" + d.total + ", " + pct + "%)" : "...");
+    document.getElementById("snapOut").textContent = "Diffing... " + pct + "%";
+    setTimeout(pollDiff, 800);
+  } else if (d.state === "done" && d.diff) {
+    wrap.style.display = "none";
+    renderDiff(d.diff);
+  } else if (d.state === "error") {
+    wrap.style.display = "none";
+    document.getElementById("snapOut").textContent = "Error: " + d.error;
+  } else {
+    wrap.style.display = "none";
+    document.getElementById("snapOut").textContent = "Diffing...";
+    setTimeout(pollDiff, 800);
+  }
+}
+function renderDiff(x) {
   document.getElementById("snapOut").innerHTML =
-    "Plat " + x.plat_from + " to " + x.plat_to + " (" + x.plat_delta + "). " +
-    "Cracked value " + x.cracked_value + "p. Sold est " + x.sold_est + "p. Relic cost " + x.relic_cost + "p at market sell." +
-    "<br>Relics out: " + x.relics_out.map(e => e.relic + " x" + e.n).join(", ") +
-    "<br>Parts in: " + x.parts_in.map(e => e.part + " x" + e.n + " (" + e.value + "p)").join(", ") +
-    "<br>Parts out: " + x.parts_out.map(e => e.part + " x" + e.n + " (" + e.value + "p)").join(", ") +
-    "<br><span>Relic cost is opportunity cost. Bought and farmed relics look the same in the dump.</span>";
+    "Over-20p parts: " + x.cracked_plat_value + "p." +
+    "<br>Arcanes: " + x.arcane_plat_value + "p." +
+    "<br>Ducats: ~" + x.fodder_plat_low + "p low / ~" + x.fodder_plat_avg +
+    "p average (" + x.fodder_ducats + " ducats).";
 }
 const BOARD_WORK = ["loading reward table", "pricing gold parts", "checking sell orders"];
 async function loadBoard() {
@@ -250,14 +276,102 @@ async function loadBoard() {
 }
 async function tileToggle() {
   const cur = document.getElementById("tileBtn").textContent;
-  await fetch("/api/tile/" + (cur === "Start" ? "start" : "stop"), {method: "POST"});
+  try {
+    await fetch("/api/tile/" + (cur === "Start" ? "start" : "stop"), {method: "POST"});
+  } catch (e) {
+    document.getElementById("tileState").textContent = "server unreachable";
+    return;
+  }
   tileRefresh();
+  // Re-check shortly after: an instant crash (bad log, missing
+  // dependency) would otherwise look like the button did nothing.
+  setTimeout(tileRefresh, 2000);
 }
 async function tileRefresh() {
-  const r = await fetch("/api/tile");
-  const d = await r.json();
+  let d;
+  try {
+    d = await (await fetch("/api/tile")).json();
+  } catch (e) {
+    document.getElementById("tileState").textContent = "server unreachable";
+    return;
+  }
   document.getElementById("tileBtn").textContent = d.running ? "Stop" : "Start";
-  document.getElementById("tileState").textContent = d.running ? "running" : "";
+  const info = d.info || {};
+  document.getElementById("tileState").textContent =
+    d.running ? (info.status || "running") : (info.status && info.status !== "stopped" ? info.status : "");
+  if (!d.running && info.error) {
+    document.getElementById("tileState").title = String(info.error).slice(0, 500);
+  } else {
+    document.getElementById("tileState").removeAttribute("title");
+  }
+}
+async function capsToggle() {
+  let running = false;
+  try {
+    running = (await (await fetch("/api/caps")).json()).running;
+  } catch (e) {
+    document.getElementById("capsState").textContent = "server unreachable";
+    return;
+  }
+  try {
+    await fetch("/api/caps/" + (running ? "stop" : "start"), {method: "POST"});
+  } catch (e) {
+    document.getElementById("capsState").textContent = "server unreachable";
+    return;
+  }
+  capsRefresh();
+  setTimeout(capsRefresh, 2000);
+}
+async function capsRefresh() {
+  let d;
+  try {
+    d = await (await fetch("/api/caps")).json();
+  } catch (e) {
+    const s = document.getElementById("capsState");
+    if (s) s.textContent = "server unreachable";
+    return;
+  }
+  const btn = document.getElementById("capsBtn");
+  if (btn) btn.textContent = d.running ? "Running" : "Open sorter";
+  const btn2 = document.getElementById("capsBtn2");
+  if (btn2) btn2.textContent = d.running ? "Running" : "Open sorter";
+  const info = d.info || {};
+  const label = d.running ? (info.status || "running") : (info.status && info.status !== "stopped" ? info.status : "");
+  const s = document.getElementById("capsState");
+  if (s) s.textContent = label;
+  const p = document.getElementById("capsProg");
+  if (p) p.textContent = d.running ? (info.status || "running") : "Not running.";
+}
+async function loadFarm() {
+  const prog = document.getElementById("farmProg");
+  const out = document.getElementById("farmOut");
+  prog.textContent = "Reading dump...";
+  let d;
+  try {
+    d = await (await fetch("/api/farm")).json();
+  } catch (e) {
+    prog.textContent = "Server unreachable.";
+    return;
+  }
+  if (!d.ok) { prog.textContent = "Error: " + (d.error || "unknown"); return; }
+  prog.textContent = "Banshee sets: x" + d.banshee_sets + ". Mirage sets: x" + d.mirage_sets +
+    ". Relics left to buy: x" + d.total_buy + ". Traces to upgrade: " + d.total_traces + ".";
+  const relicRows = d.relics.map(x => {
+    const needTxt = "x" + x.need + (x.base_need !== x.need ? " (was x" + x.base_need + ")" : "");
+    return "<tr><td>" + x.relic + "</td><td>" + x.ref + "</td><td>" + needTxt + "</td>" +
+    "<td>x" + x.have_total + " total (x" + x.have_ref + " at target)</td>" +
+    "<td>x" + x.buy + " to buy</td><td>x" + x.upgrade_need + " to upgrade (" + x.traces + " traces)</td>" +
+    "<td class='muted'>" + x.target + "</td></tr>"; }).join("");
+  const partRows = d.parts.map(x =>
+    "<tr><td>" + x.label + "</td><td>x" + x.have + " / x" + x.need + "</td>" +
+    "<td>x" + x.remaining + " left</td></tr>").join("");
+  out.innerHTML =
+    "<h3>Relics: have vs need</h3><table><thead><tr><th>Relic</th><th>Refinement</th><th>Need</th><th>Have</th><th>Buy</th><th>Upgrade</th><th>For</th></tr></thead><tbody>" +
+    relicRows + "</tbody></table>" +
+    "<div class='muted' style='margin-top:8px;'>Relics left to buy: x" + d.total_buy +
+    ". Traces to upgrade the shortfall: " + d.total_traces + ".</div>" +
+    "<h3>Parts: have vs 100 each</h3><table><thead><tr><th>Part</th><th>Have</th><th>Left</th></tr></thead><tbody>" +
+    partRows + "</tbody></table>";
 }
 async function invStatus() {
   const min = document.getElementById("tierMin").value;
@@ -319,6 +433,9 @@ setInterval(async () => {
 }, 3000);
 invStatus();
 tileRefresh();
+setInterval(tileRefresh, 5000);
+capsRefresh();
+setInterval(capsRefresh, 5000);
 loadBaro().then((here) => { if (here) loadFlips(); });
 authRefresh();
 
@@ -399,3 +516,42 @@ async function quitApp() {
   try { await fetch("/api/quit", {method: "POST"}); } catch (e) {}
   window.close();
 }
+function mexVals() {
+  const v = parseInt(document.getElementById("mex_EtoF").value, 10);
+  return {normal: {EtoF: v}, volt: {EtoF: v}, voltMode: false};
+}
+function mexPaint() {
+  const v = parseInt(document.getElementById("mex_EtoF").value, 10);
+  document.getElementById("mex_EtoF_v").textContent = v + "ms";
+}
+function mexInput() {
+  mexPaint();
+  clearTimeout(window._mexT);
+  window._mexT = setTimeout(mexSave, 400);
+}
+async function mexSave() {
+  const status = document.getElementById("mexStatus");
+  status.textContent = "Saving...";
+  try {
+    const r = await fetch("/api/mexian", {method: "POST",
+      headers: {"Content-Type": "application/json"}, body: JSON.stringify(mexVals())});
+    const d = await r.json();
+    if (d.ok) status.textContent = "Live in macro.";
+    else status.textContent = "Save failed.";
+  } catch (e) {
+    status.textContent = "Server unreachable.";
+  }
+}
+async function mexLoad() {
+  const status = document.getElementById("mexStatus");
+  try {
+    const d = await (await fetch("/api/mexian")).json();
+    if (!d.ok) return;
+    document.getElementById("mex_EtoF").value = d.normal.EtoF;
+    mexPaint();
+    status.textContent = "Live in macro.";
+  } catch (e) {
+    if (status) status.textContent = "Server unreachable.";
+  }
+}
+mexLoad();

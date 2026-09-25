@@ -129,10 +129,13 @@ def ensure_details(slugs: list, progress=None) -> None:
             continue
 
 
-def price_parts(slugs: list) -> dict:
+def price_parts(slugs: list, progress=None) -> dict:
     """{slug: {p48, p90, link, ducats}}. Medians use the 6h disk cache."""
     out = {}
-    for s in slugs:
+    total = len(slugs)
+    for i, s in enumerate(slugs, 1):
+        if progress:
+            progress(i, total, s)
         try:
             st = market_client.part_statistics(s)
         except Exception:
